@@ -1,0 +1,7 @@
+# Deploy con garganacl: Caddy fa da reverse proxy su play.nerdnostalgia.store -> 127.0.0.1:4747
+services:
+  web:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:4747:80"
