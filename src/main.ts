@@ -13,7 +13,7 @@ import {
   buildGymTeam, buildLeagueTeam, buildLegendaryTeam, buildTrainerTeam, buildWildTeam, clubTeam, simulateMatch,
 } from './match/teams';
 import { renderHub, type ChallengeKind, type Challenges, type HubState } from './ui/hub';
-import { runMatch, type MatchBanner } from './ui/matchScreen';
+import { runMatch, skipMatch, type MatchBanner } from './ui/matchScreen';
 import { renderStarterPick } from './ui/starters';
 
 const app = document.getElementById('app')!;
@@ -113,7 +113,7 @@ function showHub() {
   });
 }
 
-function playMatch(kind: ChallengeKind, trainerId?: string) {
+function playMatch(kind: ChallengeKind, trainerId?: string, skip = false) {
   const c = challenges();
   const route = kind === 'trainer' ? c.trainers.find((t) => t.trainer.id === trainerId) : undefined;
   const opponent =
@@ -122,7 +122,7 @@ function playMatch(kind: ChallengeKind, trainerId?: string) {
     : kind === 'trainer' ? route!.team
     : kind === 'legendary' ? c.legendary!
     : c.wild;
-  runMatch(app, [clubTeam(save), opponent], {
+  (skip ? skipMatch : runMatch)(app, [clubTeam(save), opponent], {
     knockout: kind === 'league',
     onFinish(match) {
       // gli esiti vanno registrati prima di awardMatch, che fa avanzare la giornata
@@ -143,8 +143,10 @@ function playMatch(kind: ChallengeKind, trainerId?: string) {
       save.roster.push({ ...inst, exp: 0 });
       storeSave(save);
     },
-    onLeave() {
+    onLeave(counted = true) {
       hub.message = null;
+      // a fine giornata si apre l'allenamento: le sessioni si sono appena ricaricate
+      if (counted) hub.tab = 'training';
       showHub();
     },
   });

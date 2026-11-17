@@ -1,6 +1,6 @@
 import { FORMATIONS, type FormationKey } from '../game/formations';
 import { POKEDEX, type BaseStats } from '../data/pokedex';
-import type { Gym } from '../game/gyms';
+import { GYMS, type Gym } from '../game/gyms';
 import { locationById, neighbors, trainerLevel, type KantoLocation, type RouteTrainer } from '../game/kanto';
 import type { LeagueTrainer } from '../game/league';
 import { findOwned, ratingsOf, type SaveData } from '../game/save';
@@ -78,7 +78,14 @@ interface EliteDef {
   /** Leggendari: uno, sorteggiato, è sempre in squadra. */
   legendary?: string[];
   pool: string[];
+  /** Quanto è allenata la squadra, 0-1: scala talento (IV) e allenamento (EV). La Lega è al massimo. */
+  training?: number;
 }
+
+/** Allenamento delle palestre: le prime sono alla portata di una squadra appena formata, le ultime al massimo. */
+export const GYM_TRAINING = { first: 0.3, last: 1 };
+export const gymTraining = (index: number) =>
+  GYM_TRAINING.first + ((GYM_TRAINING.last - GYM_TRAINING.first) * index) / 7;
 
 /**
  * Squadra di un capopalestra o di un allenatore della Lega, nuova a ogni sfida: il Pokémon simbolo
@@ -97,8 +104,11 @@ function buildEliteTeam(def: EliteDef): TeamSetup {
   const keeper = def.keeper ? insts[picks.indexOf(def.keeper)] : undefined;
   const { lineup, bench } = bestLineup(insts, def.formation, keeper);
   const slots = FORMATIONS[def.formation].slots;
+  const t = def.training ?? 1;
+  const iv = Math.round(15 + 16 * t);
+  const ev = Math.round(252 * t);
   const train = (inst: PokemonInstance, role: Role) => {
-    inst.ivs = { hp: 31, atk: 31, def: 31, spa: 31, spd: 31, spe: 31 };
+    inst.ivs = { hp: iv, atk: iv, def: iv, spa: iv, spd: iv, spe: iv };
     const sp = POKEDEX[inst.speciesKey].base;
     const att = sp.atk >= sp.spa ? 'atk' : 'spa';
     const dif = sp.def >= sp.spd ? 'def' : 'spd';
@@ -106,15 +116,16 @@ function buildEliteTeam(def: EliteDef): TeamSetup {
       POR: [dif, 'hp'], DIF: [dif, 'hp'], CEN: [att, dif], ATT: [att, 'spe'],
     };
     const [a, b] = focus[role];
-    inst.evs[a] = 252;
-    inst.evs[b] = 252;
+    inst.evs[a] = ev;
+    inst.evs[b] = ev;
   };
   lineup.forEach((inst, i) => train(inst, slots[i].role));
   bench.forEach((inst) => train(inst, 'ATT'));
   return teamFrom(def.name, def.color, false, def.formation, lineup, bench);
 }
 
-export const buildGymTeam = (gym: Gym) => buildEliteTeam({ ...gym, name: `${gym.leader} · ${gym.city}` });
+export const buildGymTeam = (gym: Gym) =>
+  buildEliteTeam({ ...gym, name: `${gym.leader} · ${gym.city}`, training: gymTraining(GYMS.indexOf(gym)) });
 
 export const buildLeagueTeam = (t: LeagueTrainer) => buildEliteTeam({ ...t, name: t.name });
 
@@ -162,17 +173,13 @@ export function buildLegendaryTeam(loc: KantoLocation): TeamSetup {
   const boss = createInstance(leg.key, Math.max(5, loc.level - leg.levelGap));
   boss.ivs = { hp: 31, atk: 31, def: 31, spa: 31, spd: 31, spe: 31 };
   const wild = localWild(loc);
-  // la sua scorta: selvatici della zona al livello pieno e allenati, non quelli della partitella
-  const others = Array.from({ length: 6 }, () => trainedInstance(wild[Math.floor(Math.random() * wild.length)], loc.level));
+  // la sua scorta: 4 selvatici della zona pescati a caso, al livello pieno e allenati
+  const others = Array.from({ length: 4 }, () => trainedInstance(wild[Math.floor(Math.random() * wild.length)], loc.level));
   const formation: FormationKey = 'rombo';
-  const { lineup, bench } = bestLineup([boss, ...others], formation);
-  if (!lineup.includes(boss)) {
-    // in panchina? prende il posto del più debole in campo (portiere escluso)
-    const weakest = lineup.slice(1).sort((a, b) => ratingsOf(a).ATT - ratingsOf(b).ATT)[0];
-    lineup[lineup.indexOf(weakest)] = boss;
-    bench.splice(bench.indexOf(boss), 1, weakest);
-  }
-  return teamFrom(`${POKEDEX[leg.key].name} e i selvatici di ${loc.name}`, '#e8a317', false, formation, lineup, bench);
+  // in campo tutti e cinque, il portiere è il più adatto
+  const { lineup } = bestLineup([boss, ...others], formation);
+  // niente panchina: il leggendario e la sua scorta giocano tutta la partita senza cambi
+  return teamFrom(`${POKEDEX[leg.key].name} e i selvatici di ${loc.name}`, '#e8a317', false, formation, lineup, []);
 }
 
 /**

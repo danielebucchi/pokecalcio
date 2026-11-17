@@ -53,8 +53,8 @@ export interface MatchCallbacks {
   onFinish(match: Match): { report: ExpReport[]; banner?: MatchBanner; offers?: RecruitOffer[] };
   /** Un selvatico che ha chiesto di unirsi è stato accettato. */
   recruit?(inst: PokemonInstance): void;
-  /** Torna all'hub (dopo il resoconto o abbandonando). */
-  onLeave(): void;
+  /** Torna all'hub: `counted` è false se la partita è stata abbandonata. */
+  onLeave(counted?: boolean): void;
 }
 
 /** Gioca la partita dentro `app`. Restituisce una funzione che ferma il ciclo. */
@@ -170,7 +170,7 @@ export function runMatch(app: HTMLElement, teams: [TeamSetup, TeamSetup], cb: Ma
   });
   document.getElementById('quit')!.onclick = () => {
     cleanup();
-    cb.onLeave();
+    cb.onLeave(false);
   };
 
   const onKey = (e: KeyboardEvent) => {
@@ -329,6 +329,18 @@ export function runMatch(app: HTMLElement, teams: [TeamSetup, TeamSetup], cb: Ma
   return cleanup;
 }
 
+/**
+ * Partita saltata: si gioca tutta subito, senza vederla, e si passa al resoconto. La tua squadra la
+ * gestisce la CPU (cambi ed evoluzioni), come fa con l'avversario.
+ */
+export function skipMatch(app: HTMLElement, teams: [TeamSetup, TeamSetup], cb: MatchCallbacks) {
+  const humanTeam = teams[0].controlled ? 0 : 1;
+  const match = new Match([{ ...teams[0], controlled: false }, { ...teams[1], controlled: false }], { knockout: cb.knockout });
+  while (!match.finished) match.step(1 / 60);
+  const { report, banner, offers } = cb.onFinish(match);
+  showPostMatch(app, match, humanTeam, report, banner, cb.onLeave, offers ?? [], cb.recruit);
+}
+
 function showPostMatch(
   app: HTMLElement, match: Match, humanTeam: 0 | 1, report: ExpReport[], banner: MatchBanner | undefined, onLeave: () => void,
   offers: RecruitOffer[] = [], recruit?: (inst: PokemonInstance) => void,
@@ -413,7 +425,7 @@ function showPostMatch(
           <b>${esc(r.name)}</b> ${r.played ? '' : '<span class="chip">riserva</span>'}
           <div class="exp-line">
             ${up ? `<span class="chip chip-mint">Lv ${r.fromLevel} → ${r.toLevel}</span>` : `<small>Lv ${r.toLevel}</small>`}
-            <small class="muted">+${r.exp} exp</small>
+            <small class="muted">${r.capped && !up ? 'al tetto di livello' : `+${r.exp} exp`}</small>
           </div>
           <div class="bar exp"><i style="width:${r.expPct}%"></i></div>
           ${r.unlocked.length ? `<span class="chip chip-lilac">ora può evolvere in ${esc(r.unlocked.join(', '))}</span>` : ''}
@@ -453,7 +465,7 @@ function showPostMatch(
     </details>
     <div class="actions"><button class="primary" data-continue>Continua</button></div>`;
   bindThemeToggle(app);
-  app.querySelectorAll<HTMLButtonElement>('[data-continue]').forEach((b) => (b.onclick = onLeave));
+  app.querySelectorAll<HTMLButtonElement>('[data-continue]').forEach((b) => (b.onclick = () => onLeave()));
   app.querySelectorAll<HTMLButtonElement>('[data-accept]').forEach((b) => {
     b.onclick = () => {
       const i = Number(b.dataset.accept);

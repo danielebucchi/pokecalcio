@@ -1333,7 +1333,9 @@ export class Match {
     const L = attacker.inst.level;
     const raw = (((2 * L) / 5 + 2) * 28 * Math.sqrt(attacker.stats.att / target.stats.dif)) / 50 + 1;
     target.hp -= raw * typeMultiplier(attacker.types, target.types) * (0.85 + Math.random() * 0.15) * mult;
-    if (target.hp <= 0) this.knockOut(target);
+    // il portiere non va mai KO: stremato para peggio, ma una porta vuota sarebbe gol a ogni tiro
+    if (target.role === 'POR') target.hp = Math.max(1, target.hp);
+    else if (target.hp <= 0) this.knockOut(target);
   }
 
   private knockOut(p: Player) {

@@ -9,7 +9,7 @@ import {
 import { typeMultiplier } from '../game/typechart';
 import { FORMATIONS, type FormationKey } from '../game/formations';
 import {
-  DRILLS, EV_STAT_CAP, MAX_LEVEL,
+  DRILLS, EV_STAT_CAP, MAX_LEVEL, levelCap,
   applyDrill, currentStats, drillBlock, drillPreview, drillStat, expToNext, suggestedDrill, type Drill,
 } from '../game/progression';
 import {
@@ -54,7 +54,7 @@ export interface HubState {
 export interface HubActions {
   /** Il salvataggio è cambiato: salva e ridisegna. */
   changed(): void;
-  play(kind: ChallengeKind, trainerId?: string): void;
+  play(kind: ChallengeKind, trainerId?: string, skip?: boolean): void;
   /** Spostati in un luogo della mappa. */
   travel(id: string): void;
   canTravel(id: string): boolean;
@@ -315,12 +315,14 @@ function renderSquad(main: HTMLElement, save: SaveData, state: HubState, actions
 // ───────────────────────────── allenamento ─────────────────────────────
 
 function renderTraining(main: HTMLElement, save: SaveData, state: HubState, actions: HubActions) {
+  const cap = levelCap(save);
   const roleOf = new Map(save.lineup.map((uid, i) => [uid, FORMATIONS[save.formation].slots[i]?.role ?? null]));
   const card = (p: OwnedPokemon) => {
     const g = currentStats(p);
     const role = roleOf.get(p.uid) ?? null;
     const suggestion = suggestedDrill(role);
-    const expPct = p.level >= MAX_LEVEL ? 100 : (p.exp / expToNext(p.level)) * 100;
+    const capped = p.level >= cap && p.level < MAX_LEVEL;
+    const expPct = p.level >= MAX_LEVEL || capped ? 100 : (p.exp / expToNext(p.level)) * 100;
     const statRows = (Object.keys(STAT_NAMES) as (keyof typeof STAT_NAMES)[])
       .map((d) => {
         const ev = p.evs[drillStat(p, d)!];
@@ -344,7 +346,7 @@ function renderTraining(main: HTMLElement, save: SaveData, state: HubState, acti
           <b>${nameOf(p)}</b> <small>Lv${p.level}</small>
           ${role ? `<span class="role role-${role}">${role}</span>` : '<span class="chip">riserva</span>'}
           <div class="bar exp" title="Esperienza verso il livello ${p.level + 1}"><i style="width:${expPct}%"></i></div>
-          <small>${p.level >= MAX_LEVEL ? 'livello massimo' : `${p.exp}/${expToNext(p.level)} esperienza`}</small>
+          <small>${p.level >= MAX_LEVEL ? 'livello massimo' : capped ? `al tetto: sale con la prossima medaglia` : `${p.exp}/${expToNext(p.level)} esperienza`}</small>
         </div>
       </div>
       ${statRows}
@@ -363,6 +365,7 @@ function renderTraining(main: HTMLElement, save: SaveData, state: HubState, acti
         <b>${save.sessionsLeft ? `${save.sessionsLeft} ${save.sessionsLeft === 1 ? 'sessione rimasta' : 'sessioni rimaste'}` : 'Sessioni finite per questa giornata'}</b>
         <p class="muted">Ogni sessione migliora una statistica di un Pokémon (o gli dà esperienza con lo sparring) e si ricarica dopo ogni partita.
         Il bottone evidenziato è quello che serve di più al suo ruolo.</p>
+        ${cap < MAX_LEVEL ? `<p class="muted"><b>Tetto di livello: ${cap}</b>. Oltre non si guadagna esperienza: si alza a ogni medaglia${save.badges >= 8 ? ' e sparisce quando vinci la Lega' : ''}.</p>` : ''}
       </div>
       ${save.sessionsLeft ? '' : '<button class="primary" id="go-play">Gioca la partita</button>'}
     </div>
@@ -581,7 +584,7 @@ function renderMap(main: HTMLElement, save: SaveData, ch: Challenges, actions: H
           <div>
             <small class="muted">Leggendario · livello ${boss.level}</small>
             <h2>${esc(sp.name)} ${sp.types.map((t) => `<span class="chip type-chip" style="--team:#e8a317">${TYPE_NAMES[t]}</span>`).join(' ')}</h2>
-            <p class="muted">Guida una squadra di selvatici di questa zona. <b>Se vinci, si unisce a te.</b> Se perdi puoi riprovare quando vuoi.</p>
+            <p class="muted">Gioca con 4 selvatici di questa zona, senza cambi. <b>Se vinci, si unisce a te.</b> Se perdi puoi riprovare quando vuoi.</p>
           </div>
           <button class="primary big" data-play="legendary" ${problem ? 'disabled' : ''}>Sfida ${esc(sp.name)}</button>
         </div>
@@ -608,7 +611,10 @@ function renderMap(main: HTMLElement, save: SaveData, ch: Challenges, actions: H
       Fa anche esperienza (poca, se sei già più forte di loro).</p>
       <div class="mini-team">${[...ch.wild.roster.map((r) => r.inst), ...(ch.wild.bench ?? [])].map((i) => `<img src="${spriteUrl(POKEDEX[i.speciesKey].dex)}" alt="" title="${esc(POKEDEX[i.speciesKey].name)}">`).join('')}</div>
     </div>
-    <button class="primary" data-play="wild" ${problem ? 'disabled' : ''}>Gioca la partitella</button>
+    <div class="wild-actions">
+      <button class="primary" data-play="wild" ${problem ? 'disabled' : ''}>Gioca la partitella</button>
+      <button data-skip="wild" ${problem ? 'disabled' : ''} title="Si gioca subito senza vederla: cambi ed evoluzioni li decide la CPU">Salta ⏭ <small>solo risultato</small></button>
+    </div>
   </section>`;
 
   const destinations = neighbors(loc.id).map((id) => {
@@ -653,13 +659,14 @@ function renderMap(main: HTMLElement, save: SaveData, ch: Challenges, actions: H
       <summary>Come funziona il gioco</summary>
       <ul>
         <li><b>Mappa</b>: ti sposti nei luoghi vicini; le medaglie aprono nuove zone come nei giochi e dalla Medaglia Tuono puoi volare nelle città già visitate. Sui percorsi ci sono allenatori da battere una volta e la partitella con i selvatici, ripetibile.</li>
+        <li><b>Tetto di livello</b>: si cresce fino a 2 livelli sopra la prossima palestra (68 prima della Lega), poi serve la medaglia. Da Campione il tetto sparisce.</li>
         <li><b>Leggendari</b>: Zapdos alla Centrale Elettrica, Articuno alle Isole Spumarine, Moltres sulla Via Vittoria e Mewtwo nella Grotta Ignota (aperta dopo aver vinto la Lega). Guidano una squadra di selvatici: se vinci, si uniscono a te.</li>
         <li><b>Nuovi Pokémon</b>: niente lotte né Poké Ball. Se vinci la partitella con i selvatici, di solito uno chiede di unirsi alla squadra e tu decidi se accettare. Chi evolve si convince più facilmente, i Pokémon già forti e rari molto meno, e conta anche come ha giocato contro di te. La rosa non ha limiti.</li>
         <li><b>Palestre</b>: si battono in ordine, ognuna nella sua città; ognuna ha un tipo e un livello fisso. Vincere dà la medaglia.</li>
         <li><b>Esperienza</b>: come nei giochi, un avversario di livello più alto rende di più; uno più debole di te rende poco.</li>
         <li><b>Statistiche</b>: Attacco e Difesa sono il valore più alto tra fisico e speciale; Velocità è quanto corre; i PV sono la resistenza. Partono dalle statistiche di Bulbapedia e crescono con livello e allenamento.</li>
         <li><b>Tipi</b>: contano molto. Il vantaggio dei giochi qui vale ×1.25 (lo svantaggio ×0.8) e pesa su contrasti, danni e parate: contro una palestra schiera chi ha il tipo giusto.</li>
-        <li><b>KO</b>: a 0 PV un Pokémon resta fermo per 6 minuti e rientra con metà dei PV; dal secondo KO solo con un quarto.</li>
+        <li><b>KO</b>: a 0 PV un Pokémon resta fermo per 6 minuti e rientra con metà dei PV; dal secondo KO solo con un quarto. Il portiere non va mai KO: stremato para peggio, ma resta in porta.</li>
         <li><b>Falli</b>: chi entra con tanto Attacco e poca Difesa è irruento. In area è rigore, vicino alla porta punizione, lontano si riparte subito.</li>
         <li><b>Calci piazzati</b>: rimesse laterali con i piedi come nel calcio a 5; sugli angoli e sui cross vince il duello aereo chi ha Difesa, PV e altezza.</li>
         <li><b>Portiere</b>: para con Difesa, PV e Velocità; più è alto, più porta copre (Onix!).</li>
@@ -671,6 +678,11 @@ function renderMap(main: HTMLElement, save: SaveData, ch: Challenges, actions: H
   main.querySelectorAll<HTMLButtonElement>('[data-play]').forEach((b) => {
     b.onclick = () => {
       if (!lineupProblem(save)) actions.play(b.dataset.play as ChallengeKind);
+    };
+  });
+  main.querySelectorAll<HTMLButtonElement>('[data-skip]').forEach((b) => {
+    b.onclick = () => {
+      if (!lineupProblem(save)) actions.play(b.dataset.skip as ChallengeKind, undefined, true);
     };
   });
   main.querySelectorAll<HTMLButtonElement>('[data-trainer]').forEach((b) => {
