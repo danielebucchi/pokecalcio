@@ -65,6 +65,7 @@ for (let c = 0; c < CAREERS; c++) {
       grind++;
       play(save, buildWildTeam(city));
     }
+    save.badges = g + 1; // alza il tetto di livello come nel gioco
     stats[g].tries.push(tries);
     stats[g].grind.push(grind);
   }

@@ -439,6 +439,8 @@ td.best { color: var(--pink-deep); font-weight: 800; }
 .wild-mon small { font-size: 0.7rem; text-align: center; }
 .wild-match { display: flex; justify-content: space-between; align-items: center; gap: 12px; border-left: 6px solid var(--mint-deep); }
 .wild-match p { margin: 4px 0 6px; }
+.wild-actions { display: flex; flex-direction: column; gap: 6px; flex-shrink: 0; }
+.wild-actions small { opacity: 0.7; }
 .next-goal { font-size: 1rem; }
 
 /* Lega: tabellone */
