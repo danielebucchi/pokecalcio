@@ -3,8 +3,9 @@ import { spriteFor, whiteSprite } from '../ui/sprites';
 import { currentTheme } from '../ui/theme';
 import {
   BOX_DEPTH, BOX_HALF, CY, FIELD_H, FIELD_W, GOAL_HALF, PENALTY_DIST, SIM_PER_MINUTE,
-  isActive, type Match, type Player,
+  type Match, type Player,
 } from './engine';
+import type { BallView, PlayerView, Snapshot } from './replay';
 
 const S = 10; // pixel per metro
 const M = 30; // margine (deve contenere le porte, profonde 25 px)
@@ -44,6 +45,8 @@ export class Renderer {
   /** Ultimo stadio visto per giocatore: se sale, è un'evoluzione (un cambio lo riporta a 0). */
   private lastStage = new Map<number, { stage: number; form: string }>();
   private t: Palette = PALETTES.light;
+  /** Fotogramma del replay da disegnare al posto della partita in corso (null = in diretta). */
+  replay: Snapshot | null = null;
   readonly width: number;
   readonly height: number;
 
@@ -77,10 +80,14 @@ export class Renderer {
     this.t = PALETTES[currentTheme()];
     c.clearRect(0, 0, this.width, this.height);
     this.drawPitch();
-    const sorted = [...this.match.players].sort((a, b) => Number(isActive(b)) - Number(isActive(a)) || a.y - b.y);
-    for (const p of sorted) this.drawPlayer(p);
-    this.drawBall();
-    this.drawSetPieceBanner();
+    const view = this.replay;
+    const players: PlayerView[] = view ? view.players : this.match.players;
+    const active = (p: PlayerView) => p.koTimer <= 0;
+    const sorted = [...players].sort((a, b) => Number(active(b)) - Number(active(a)) || a.y - b.y);
+    for (const p of sorted) this.drawPlayer(p, !view);
+    this.drawBall(view ? view.ball : { ...this.match.ball, shot: !!this.match.ball.shot });
+    if (view) this.drawBanner('REPLAY', '#e879a8');
+    else this.drawSetPieceBanner();
   }
 
   private drawSetPieceBanner() {
@@ -92,6 +99,11 @@ export class Renderer {
       penalty: 'RIGORE',
       kickin: 'RIMESSA LATERALE',
     }[sp.kind];
+    this.drawBanner(label, this.match.teams[sp.team].color);
+  }
+
+  /** Pillola scura in alto al centro, con il pallino colorato. */
+  private drawBanner(label: string, dot: string) {
     const c = this.ctx;
     c.save();
     c.font = `600 22px ${FONT_DISPLAY}`;
@@ -109,7 +121,7 @@ export class Renderer {
     c.roundRect(x0, 14, w, 42, 21);
     c.fill();
     c.shadowColor = 'transparent';
-    c.fillStyle = this.match.teams[sp.team].color;
+    c.fillStyle = dot;
     c.beginPath();
     c.arc(x0 + 24, 35, 6, 0, Math.PI * 2);
     c.fill();
@@ -193,7 +205,8 @@ export class Renderer {
     }
   }
 
-  private drawPlayer(p: Player) {
+  /** `live`: partita in diretta (nel replay niente animazioni di evoluzione né etichette "Evolvi"). */
+  private drawPlayer(p: PlayerView, live: boolean) {
     const c = this.ctx;
     const m = this.match;
     const [sx, sy] = this.pos(p.x, p.y);
@@ -204,7 +217,7 @@ export class Renderer {
     const x = 0;
     const y = 0;
     const color = m.teams[p.team].color;
-    const ko = !isActive(p);
+    const ko = p.koTimer > 0;
     c.save();
     c.globalAlpha = ko ? 0.45 : 1;
 
@@ -239,10 +252,12 @@ export class Renderer {
     const size = 76 + p.stage * 10;
     // evoluzione appena avvenuta: parte l'animazione (lo stadio sale; un cambio lo riporta a 0)
     const now = performance.now();
-    const seen = this.lastStage.get(p.id);
-    if (seen && p.stage > seen.stage) this.evoAnims.set(p.id, { from: seen.form, start: now });
-    this.lastStage.set(p.id, { stage: p.stage, form: p.formKey });
-    const anim = this.evoAnims.get(p.id);
+    if (live) {
+      const seen = this.lastStage.get(p.id);
+      if (seen && p.stage > seen.stage) this.evoAnims.set(p.id, { from: seen.form, start: now });
+      this.lastStage.set(p.id, { stage: p.stage, form: p.formKey });
+    }
+    const anim = live ? this.evoAnims.get(p.id) : undefined;
     const t = anim ? now - anim.start : Infinity;
     if (anim && t >= EVO_ANIM_MS) this.evoAnims.delete(p.id);
     if (img && anim && t < EVO_ANIM_MS) {
@@ -307,7 +322,7 @@ export class Renderer {
     c.beginPath();
     c.roundRect(bx, by, Math.max(2, bw * hpR), 4, 2);
     c.fill();
-    const canEvo = m.evolveBlock(p) === null;
+    const canEvo = live && m.evolveBlock(p as Player) === null;
     if (p.evo > 0) {
       // pronta a evolvere: pulsa tra rosa e lilla
       const pulse = 0.5 + 0.5 * Math.sin(performance.now() / 150);
@@ -330,7 +345,7 @@ export class Renderer {
 
     // il tuo Pokémon può evolvere: etichetta pulsante sopra la testa
     if (canEvo && m.teams[p.team].controlled) {
-      const n = m.players.filter((q) => q.team === p.team).indexOf(p) + 1;
+      const n = m.players.filter((q) => q.team === p.team).indexOf(p as Player) + 1;
       const label = `✦ Evolvi ${n}`;
       c.font = `700 11px ${FONT_BODY}`;
       const lw = c.measureText(label).width + 16;
@@ -355,9 +370,8 @@ export class Renderer {
     c.restore();
   }
 
-  private drawBall() {
+  private drawBall(b: BallView) {
     const c = this.ctx;
-    const b = this.match.ball;
     const [x, y] = this.pos(b.x, b.y);
     if (b.shot) {
       // scia: dove era la palla un attimo fa (1,5 px per m/s)

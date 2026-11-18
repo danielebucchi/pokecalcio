@@ -112,7 +112,7 @@ export const KANTO: KantoLocation[] = [
     id: 'percorso-3', name: 'Percorso 3', kind: 'route', x: 315, y: 170, badges: 1, level: 31,
     wild: ['spearow', 'jigglypuff', 'nidoran-f', 'nidoran-m', 'mankey', 'sandshrew'],
     trainers: [
-      { id: 'p3-bulletto', name: 'Bulletto', team: ['rattata', 'ekans'] },
+      { id: 'p3-bulletto', name: 'Bullo', team: ['rattata', 'ekans'] },
       { id: 'p3-pigliamosche', name: 'Pigliamosche', team: ['caterpie', 'weedle', 'paras'] },
     ],
   },
@@ -155,10 +155,11 @@ export const KANTO: KantoLocation[] = [
   { id: 'percorso-5', name: 'Percorso 5', kind: 'route', x: 650, y: 240, badges: 2, level: 35, requiresTrainer: 'blu-2', wild: ['oddish', 'bellsprout', 'pidgey', 'meowth', 'mankey'], trainers: [] },
   {
     id: 'percorso-6', name: 'Percorso 6', kind: 'route', x: 650, y: 410, badges: 2, level: 36,
-    wild: ['oddish', 'bellsprout', 'pidgey', 'meowth', 'psyduck'],
+    // Poliwag e Goldeen: si pescano con l'Amo Buono, come in Rosso/Blu
+    wild: ['oddish', 'bellsprout', 'pidgey', 'meowth', 'psyduck', 'poliwag', 'goldeen'],
     trainers: [
       { id: 'p6-campeggiatore', name: 'Campeggiatore', team: ['squirtle', 'sandshrew'] },
-      { id: 'p6-allieva', name: 'Allieva', team: ['pidgey', 'oddish', 'bellsprout'] },
+      { id: 'p6-allieva', name: 'Pupa', team: ['pidgey', 'oddish', 'bellsprout'] },
     ],
   },
   {
@@ -200,7 +201,8 @@ export const KANTO: KantoLocation[] = [
     ],
   },
   { id: 'percorso-8', name: 'Percorso 8', kind: 'route', x: 770, y: 330, badges: 3, level: 41, wild: ['pidgey', 'meowth', 'ekans', 'sandshrew', 'vulpix', 'growlithe'], trainers: [] },
-  { id: 'percorso-7', name: 'Percorso 7', kind: 'route', x: 540, y: 330, badges: 3, level: 41, wild: ['pidgey', 'oddish', 'bellsprout', 'meowth', 'vulpix', 'growlithe'], trainers: [] },
+  // Mr. Mime: alle porte di Zafferanopoli (nei giochi si aveva con uno scambio)
+  { id: 'percorso-7', name: 'Percorso 7', kind: 'route', x: 540, y: 330, badges: 3, level: 41, wild: ['pidgey', 'oddish', 'bellsprout', 'meowth', 'vulpix', 'growlithe', 'mr-mime'], trainers: [] },
   {
     id: 'azzurropoli', name: 'Azzurropoli', kind: 'city', x: 430, y: 330, badges: 3, level: 42, gym: 3, wild: [],
     events: [{
@@ -214,7 +216,8 @@ export const KANTO: KantoLocation[] = [
   // ── verso Koga (Lv 48) ──
   {
     id: 'pista-ciclabile', name: 'Pista Ciclabile', kind: 'route', x: 320, y: 460, badges: 4, level: 45,
-    wild: ['rattata', 'spearow', 'doduo'],
+    // Lickitung: in Rosso/Blu si aveva con lo scambio in fondo alla Pista
+    wild: ['rattata', 'spearow', 'doduo', 'lickitung'],
     trainers: [
       { id: 'pista-centauro', name: 'Centauro', team: ['koffing', 'grimer'] },
       { id: 'pista-teppista', name: 'Teppista', team: ['machop', 'rattata'] },
@@ -222,7 +225,7 @@ export const KANTO: KantoLocation[] = [
   },
   {
     id: 'percorso-12', name: 'Percorsi 12-15', kind: 'route', x: 880, y: 450, badges: 4, level: 45,
-    wild: ['oddish', 'bellsprout', 'venonat', 'pidgey', 'ditto', 'snorlax'],
+    wild: ['oddish', 'bellsprout', 'venonat', 'pidgey', 'ditto', 'snorlax', 'farfetchd'],
     trainers: [
       { id: 'p12-pescatore', name: 'Pescatore', team: ['magikarp', 'goldeen', 'tentacool'] },
       { id: 'p13-ornitologo', name: 'Ornitologo', team: ['pidgey', 'spearow', 'farfetchd'] },
@@ -268,13 +271,19 @@ export const KANTO: KantoLocation[] = [
   },
   {
     id: 'isole-spumarine', name: 'Isole Spumarine', kind: 'dungeon', x: 300, y: 660, badges: 5, level: 56,
-    wild: ['seel', 'psyduck', 'slowpoke', 'zubat', 'krabby'], trainers: [], legendary: { key: 'articuno', levelGap: -6 },
+    wild: ['seel', 'psyduck', 'slowpoke', 'zubat', 'krabby', 'jynx'], trainers: [], legendary: { key: 'articuno', levelGap: -6 },
   },
   {
     id: 'isola-cannella', name: 'Isola Cannella', kind: 'city', x: 200, y: 650, badges: 5, level: 57, gym: 6,
     // Villa Pokémon
     wild: ['grimer', 'koffing', 'ponyta', 'growlithe', 'vulpix', 'magmar'],
-    trainers: [{ id: 'villa-scassinatore', name: 'Scassinatore (Villa Pokémon)', team: ['growlithe', 'vulpix', 'ponyta'] }],
+    events: [{
+      id: 'ev-ambra', title: "L'Ambra Antica",
+      text: "Battuto lo Scienziato della Villa Pokémon, il laboratorio di Cannella rianima l'Ambra Antica: ne nasce un Aerodactyl.",
+      // Aerodactyl è già nella forma finale e fortissimo: scorta più bassa per restare sul ~55%
+      species: ['aerodactyl'], beat: ['villa-scassinatore'], escortLevels: -2,
+    }],
+    trainers: [{ id: 'villa-scassinatore', name: 'Scienziato (Villa Pokémon)', team: ['growlithe', 'vulpix', 'ponyta'] }],
   },
 
   // ── verso Giovanni (Lv 63) ──

@@ -371,7 +371,11 @@ td.best { color: var(--pink-deep); font-weight: 800; }
 .pokedex summary::before { content: '▸'; color: var(--ink-mute); transition: transform 200ms var(--ease); }
 .pokedex[open] summary::before { transform: rotate(90deg); }
 .dex-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(64px, 1fr)); gap: 6px; margin: 10px 0 8px; }
-.dex-cell { position: relative; display: flex; flex-direction: column; align-items: center; padding: 4px 2px; border-radius: 12px; background: var(--track); }
+.dex-cell { position: relative; display: flex; flex-direction: column; align-items: center; padding: 4px 2px; border-radius: 12px; background: var(--track); border: 2px solid transparent; cursor: pointer; font: inherit; color: inherit; box-shadow: none; }
+.dex-cell.picked { border-color: var(--lilac-deep); }
+.dex-cell.unseen img { filter: brightness(0) opacity(0.25); }
+.dex-info { min-height: 1.4em; margin: 8px 0 4px; }
+.pokedex h4 { margin: 12px 0 0; }
 .dex-cell img { width: 48px; height: 48px; image-rendering: pixelated; filter: grayscale(1) opacity(0.45); }
 .dex-cell.caught { background: var(--lilac-soft); }
 .dex-cell.caught img { filter: none; }
@@ -380,6 +384,24 @@ td.best { color: var(--pink-deep); font-weight: 800; }
 .dex-cell small { font-size: 0.62rem; color: var(--ink-mute); }
 
 /* statistiche della carriera */
+.career-stats summary, .pokedex summary, .achievements summary { cursor: pointer; }
+.fold summary { cursor: pointer; list-style: none; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.fold summary::-webkit-details-marker { display: none; }
+.fold summary::before { content: '▸'; color: var(--ink-mute); transition: transform 200ms var(--ease); }
+.fold[open] summary::before { transform: rotate(90deg); }
+.ach-list { list-style: none; margin: 10px 0 0; padding: 0; display: grid; gap: 6px; }
+.ach-list li { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 14px; background: var(--track); }
+.ach-list li:not(.done) { opacity: 0.7; }
+.ach-list li.done { background: var(--lilac-soft); }
+.ach-list button { margin-left: auto; padding: 0.25rem 0.7rem; font-size: 0.75rem; flex: none; }
+.ach-icon { font-size: 1.3rem; flex: none; }
+.ach-body { display: flex; flex-direction: column; min-width: 0; }
+.ach-body small { font-size: 0.75rem; }
+.club-title { display: inline-block; margin: 2px 0 4px; font: 500 0.85rem 'Fredoka', sans-serif; color: var(--ink-mute); }
+.achievement-unlocked { display: flex; align-items: center; gap: 14px; border-left: 6px solid #e8a317; }
+.achievement-unlocked .ach-icon { font-size: 2.2rem; }
+.achievement-unlocked h3 { margin: 2px 0; }
+.achievement-unlocked p { margin: 0; }
 .career-stats summary, .pokedex summary { cursor: pointer; }
 .career-stats summary { list-style: none; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .career-stats summary::-webkit-details-marker { display: none; }
@@ -459,6 +481,9 @@ td.best { color: var(--pink-deep); font-weight: 800; }
   box-shadow: 0 8px 20px -8px var(--team), inset 0 0 0 3px rgba(255, 255, 255, 0.35); }
 .badge-slot:not(.won) b, .badge-slot:not(.won) small { color: var(--ink-mute); }
 .badge-medal.big { width: 64px; height: 64px; }
+.medal { width: 44px; height: 44px; flex: none; object-fit: contain; filter: drop-shadow(0 6px 10px rgba(0, 0, 0, 0.25)); }
+.medal.big { width: 64px; height: 64px; }
+.medal.locked { filter: grayscale(1) brightness(0.8); opacity: 0.3; }
 .challenge { margin-bottom: 16px; border-left: 6px solid var(--team); }
 .challenge-head { display: flex; gap: 16px; align-items: center; }
 .challenge-head h2 { margin: 2px 0; display: flex; align-items: center; gap: 10px; }
@@ -703,6 +728,7 @@ details.rules summary { cursor: pointer; font: 500 1.1rem 'Fredoka', sans-serif;
 .controls #quit { margin-left: auto; }
 .controls .icon-btn { padding-inline: 0.55rem; opacity: 0.45; filter: grayscale(1); }
 .controls .icon-btn.on { opacity: 1; filter: none; }
+.log li .replay-btn { margin-left: 6px; padding: 0 0.5rem; font-size: 0.7rem; line-height: 1.5; vertical-align: middle; }
 .arena { display: grid; grid-template-columns: auto minmax(280px, 1fr); gap: 14px; }
 .pitch-wrap { position: relative; }
 /* campo, comandi e carte devono stare in una schermata: il campo si adatta all'altezza */
@@ -859,6 +885,8 @@ canvas { width: auto; height: auto; max-width: 100%; max-height: calc(100vh - 32
   .legend-sprite { width: 72px; height: 72px; }
   .badges { gap: 6px; }
   .badge-medal { width: 36px; height: 36px; }
+  .medal { width: 36px; height: 36px; }
+  .medal.big { width: 52px; height: 52px; }
   .badge-slot b { font-size: 0.8rem; }
 
   /* scelta della prima squadra */
