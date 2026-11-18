@@ -61,19 +61,21 @@ export function arriveAt(save: SaveData, id: string): number {
 }
 
 /**
- * Gruppo da cui scegli la prima squadra (solo 5): forme base di forza paragonabile, con ruoli diversi.
- * Niente Pokémon già forti in partenza (Snorlax…): sbilancerebbero l'inizio contro Brock.
+ * La prima squadra si sceglie per ruoli, come in un draft: 1 portiere su 5, 2 difensori su 8 e
+ * 2 attaccanti su 8. Forme base di Kanto di forza paragonabile, scelte per voto nel ruolo; niente
+ * Pokémon già forti in partenza (Scyther, Tangela…): sbilancerebbero l'inizio contro Brock.
+ * La squadra va in campo nel Quadrato (2-2), che è proprio portiere, 2 difensori e 2 attaccanti.
  */
-export const STARTER_POOL = [
-  'bulbasaur', 'charmander', 'squirtle', 'pikachu', 'eevee',
-  'onix', 'geodude', 'poliwag',
-  'machop', 'abra', 'gastly', 'growlithe', 'nidoran-m',
-  'dratini', 'magikarp',
-];
+export const STARTER_GROUPS = [
+  { role: 'POR', label: 'Portiere', count: 1, pool: ['onix', 'tentacool', 'drowzee', 'cubone', 'shellder'] },
+  { role: 'DIF', label: 'Difensori', count: 2, pool: ['squirtle', 'bulbasaur', 'geodude', 'krabby', 'sandshrew', 'koffing', 'exeggcute', 'seel'] },
+  { role: 'ATT', label: 'Attaccanti', count: 2, pool: ['charmander', 'pikachu', 'abra', 'gastly', 'mankey', 'growlithe', 'eevee', 'dratini'] },
+] as const;
+export const STARTER_POOL: string[] = STARTER_GROUPS.flatMap((g) => [...g.pool]);
 export const STARTER_COUNT = 5;
 export const STARTER_LEVEL = 30;
-/** Squadra usata dalle simulazioni: tipi vari, un portiere vero. */
-export const DEFAULT_STARTERS = ['onix', 'geodude', 'bulbasaur', 'squirtle', 'pikachu'];
+/** Squadra usata dalle simulazioni: portiere, 2 difensori, 2 attaccanti (in quest'ordine). */
+export const DEFAULT_STARTERS = ['onix', 'squirtle', 'bulbasaur', 'mankey', 'abra'];
 
 /** Nuova carriera senza squadra: la si sceglie con chooseStarters (schermata iniziale). */
 export function newSave(): SaveData {
@@ -101,11 +103,23 @@ export function newSave(): SaveData {
   };
 }
 
-/** La prima squadra: i 5 Pokémon scelti, tutti allo stesso livello, schierati nella formazione migliore. */
+/**
+ * La prima squadra, in ordine: portiere, 2 difensori, 2 attaccanti (ognuno dal suo gruppo).
+ * Tutti allo stesso livello, schierati nel Quadrato ognuno nel ruolo per cui è stato scelto.
+ */
 export function chooseStarters(save: SaveData, keys: string[]) {
-  if (keys.length !== STARTER_COUNT || keys.some((k) => !STARTER_POOL.includes(k))) throw new Error('Scegli 5 Pokémon del gruppo');
+  let i = 0;
+  for (const g of STARTER_GROUPS) {
+    const part = keys.slice(i, i + g.count);
+    if (part.length !== g.count || part.some((k) => !(g.pool as readonly string[]).includes(k)) || new Set(part).size !== part.length) {
+      throw new Error(`Scegli ${g.count} ${g.label.toLowerCase()} dal loro gruppo`);
+    }
+    i += g.count;
+  }
+  if (keys.length !== STARTER_COUNT) throw new Error('Scegli 5 Pokémon');
   save.roster = keys.map((key) => ({ ...createInstance(key, STARTER_LEVEL), exp: 0 }));
-  save.lineup = autoLineup(save);
+  save.formation = 'quadrato';
+  save.lineup = save.roster.map((p) => p.uid);
   save.bench = autoBench(save);
 }
 
