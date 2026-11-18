@@ -7,7 +7,7 @@ import {
 } from './game/league';
 import { awardMatch } from './game/progression';
 import { recruitOffers } from './game/recruit';
-import { chooseStarters, loadSave, newSave, storeSave, type SaveData } from './game/save';
+import { arriveAt, chooseStarters, loadSave, newSave, storeSave, type SaveData } from './game/save';
 import type { Match, TeamSetup } from './match/engine';
 import {
   buildGymTeam, buildLeagueTeam, buildLegendaryTeam, buildTrainerTeam, buildWildTeam, clubTeam, simulateMatch,
@@ -89,8 +89,8 @@ function showHub() {
     play: playMatch,
     travel(id) {
       if (!canTravel(id)) return;
-      save.location = id;
-      if (!save.visited.includes(id)) save.visited.push(id);
+      const gained = arriveAt(save, id);
+      hub.message = gained ? `${locationById(id).name}: ${gained} nuove sessioni di allenamento.` : null;
       storeSave(save);
       showHub();
     },
@@ -145,8 +145,8 @@ function playMatch(kind: ChallengeKind, trainerId?: string, skip = false) {
     },
     onLeave(counted = true) {
       hub.message = null;
-      // a fine giornata si apre l'allenamento: le sessioni si sono appena ricaricate
-      if (counted) hub.tab = 'training';
+      // a fine partita, se hai sessioni da usare, si apre l'allenamento (altrimenti ce se ne dimentica)
+      if (counted && (save.sessionsLeft > 0 || save.sparringLeft > 0)) hub.tab = 'training';
       showHub();
     },
   });

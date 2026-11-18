@@ -1,7 +1,7 @@
 import { POKEDEX, descendants, type BaseStats } from '../data/pokedex';
 import type { Match } from '../match/engine';
 import { GYMS } from './gyms';
-import { SESSIONS_PER_MATCHDAY, type OwnedPokemon, type SaveData } from './save';
+import { SESSIONS_PER_PLACE, SPARRING_PER_MATCH, type OwnedPokemon, type SaveData } from './save';
 import { gameStats, realStats, type GameStats, type Role } from './stats';
 
 export const MAX_LEVEL = 100;
@@ -81,11 +81,12 @@ export function drillStat(p: OwnedPokemon, drill: Drill): keyof BaseStats | null
 export const evTotal = (p: OwnedPokemon) => Object.values(p.evs).reduce((a, b) => a + b, 0);
 
 export function drillBlock(save: SaveData, p: OwnedPokemon, drill: Drill): string | null {
-  if (save.sessionsLeft <= 0) return 'Sessioni finite: gioca la prossima partita';
   if (drill === 'sparring') {
+    if (save.sparringLeft <= 0) return 'Sparring finiti: si ricaricano dopo la prossima partita';
     if (p.level >= MAX_LEVEL) return 'Livello massimo';
     return p.level >= levelCap(save) ? `Al tetto (Lv ${levelCap(save)}): sale con la prossima medaglia` : null;
   }
+  if (save.sessionsLeft <= 0) return `Sessioni finite: ne ricevi ${SESSIONS_PER_PLACE} in ogni luogo nuovo`;
   const stat = drillStat(p, drill)!;
   if (p.evs[stat] >= EV_STAT_CAP) return 'Statistica già al massimo dell\'allenamento';
   if (evTotal(p) >= EV_TOTAL_CAP) return 'Ha raggiunto il limite totale di allenamento (510 EV)';
@@ -113,12 +114,13 @@ export function suggestedDrill(role: Role | null): Drill {
 export function applyDrill(save: SaveData, p: OwnedPokemon, drill: Drill): string {
   const name = POKEDEX[p.speciesKey].name;
   const before = currentStats(p);
-  save.sessionsLeft--;
   if (drill === 'sparring') {
+    save.sparringLeft--;
     const lv = p.level;
     addExp(p, SPARRING_EXP, levelCap(save));
     return p.level > lv ? `${name} sale al livello ${p.level}!` : `${name} guadagna ${SPARRING_EXP} punti esperienza.`;
   }
+  save.sessionsLeft--;
   const stat = drillStat(p, drill)!;
   const add = Math.min(EV_PER_SESSION, EV_STAT_CAP - p.evs[stat], EV_TOTAL_CAP - evTotal(p));
   p.evs[stat] += add;
@@ -148,16 +150,27 @@ export interface ExpReport {
   capped: boolean;
 }
 
-/** Assegna esperienza, aggiorna il record e ricarica le sessioni. Modifica il salvataggio. */
+/** Penalità del risultato sull'esperienza: chi perde non ne prende, il pareggio la dimezza. */
+export const RESULT_EXP = { w: 1, d: 0.5, l: 0 } as const;
+
+/** Testo della penalità per il resoconto (null se hai vinto). */
+export function resultPenaltyText(result: 'w' | 'd' | 'l'): string | null {
+  if (result === 'l') return `Sconfitta: nessuno guadagna esperienza e hai solo ${SPARRING_PER_MATCH.l} sparring.`;
+  if (result === 'd') return `Pareggio: metà esperienza e ${SPARRING_PER_MATCH.d} sparring invece di ${SPARRING_PER_MATCH.w}.`;
+  return null;
+}
+
+/** Assegna esperienza e aggiorna il record. Modifica il salvataggio. */
 export function awardMatch(save: SaveData, match: Match, team: 0 | 1): ExpReport[] {
   const us = match.score[team];
   const them = match.score[team === 0 ? 1 : 0];
-  const result = us > them ? 'w' : us < them ? 'l' : 'd';
+  // ai rigori conta chi li vince
+  const result = match.winner === team ? 'w' : match.winner === null ? 'd' : 'l';
+  save.sparringLeft = SPARRING_PER_MATCH[result];
   save.record[result]++;
   save.record.gf += us;
   save.record.ga += them;
   save.matchday++;
-  save.sessionsLeft = SESSIONS_PER_MATCHDAY;
 
   const bonus = { w: 100, d: 50, l: 0 }[result];
   // come nei giochi: avversari più deboli di te rendono meno, più forti rendono di più
@@ -178,7 +191,7 @@ export function awardMatch(save: SaveData, match: Match, team: 0 | 1): ExpReport
       exp = 150 + bonus + t.goals * 40 + t.assists * 25 + t.saves * 15 + t.tackles * 10;
     }
     const fromLevel = p.level;
-    exp = fromLevel >= cap ? 0 : Math.round(exp * levelFactor);
+    exp = fromLevel >= cap ? 0 : Math.round(exp * levelFactor * RESULT_EXP[result]);
     addExp(p, exp, cap);
     const unlocked = descendants(p.speciesKey)
       .filter((s) => fromLevel < s.level && p.level >= s.level)

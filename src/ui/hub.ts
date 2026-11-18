@@ -13,7 +13,7 @@ import {
   applyDrill, currentStats, drillBlock, drillPreview, drillStat, expToNext, suggestedDrill, type Drill,
 } from '../game/progression';
 import {
-  SESSIONS_PER_MATCHDAY, autoLineup, findOwned, lineupProblem, ratingsOf,
+  SESSIONS_PER_PLACE, SPARRING_PER_MATCH, autoLineup, findOwned, lineupProblem, ratingsOf,
   type OwnedPokemon, type SaveData,
 } from '../game/save';
 import type { PokemonInstance, Role } from '../game/stats';
@@ -101,7 +101,7 @@ export function renderHub(app: HTMLElement, save: SaveData, ch: Challenges, stat
   const problem = lineupProblem(save);
   const tabs: [HubTab, string, string][] = [
     ['squad', 'Formazione', ''],
-    ['training', 'Allenamento', save.sessionsLeft ? `<span class="badge">${save.sessionsLeft}</span>` : ''],
+    ['training', 'Allenamento', save.sessionsLeft + save.sparringLeft ? `<span class="badge">${save.sessionsLeft + save.sparringLeft}</span>` : ''],
     ['map', 'Mappa di Kanto', ''],
   ];
   const showWelcome = save.matchday === 1 && !localStorage.getItem(WELCOME_KEY);
@@ -165,7 +165,7 @@ export function renderHub(app: HTMLElement, save: SaveData, ch: Challenges, stat
   const main = document.getElementById('tab')!;
   if (state.tab === 'squad') renderSquad(main, save, state, actions);
   else if (state.tab === 'training') renderTraining(main, save, state, actions);
-  else renderMap(main, save, ch, actions);
+  else renderMap(main, save, ch, actions, state.message);
 }
 
 /** Testata: dove sei e il prossimo obiettivo, con il bottone giusto per il luogo in cui ti trovi. */
@@ -202,7 +202,7 @@ function welcomeHtml(): string {
     <h2>Benvenuto, allenatore <span class="sparkle">✦</span></h2>
     <ol class="steps">
       <li><b>Formazione</b><span>Tocca una posizione sul campo e scegli chi ci gioca. Il voto ti dice quanto è adatto al ruolo.</span></li>
-      <li><b>Allenamento</b><span>Prima di ogni partita hai ${SESSIONS_PER_MATCHDAY} sessioni per migliorare i tuoi Pokémon.</span></li>
+      <li><b>Allenamento</b><span>Ogni luogo nuovo ti dà ${SESSIONS_PER_PLACE} sessioni per le statistiche; dopo ogni partita hai degli sparring per l'esperienza.</span></li>
       <li><b>Mappa di Kanto</b><span>Viaggia da Biancavilla, batti gli allenatori sui percorsi e gli 8 capipalestra per le medaglie: ognuna apre nuovi luoghi. In partita, quando una carta si illumina, puoi evolvere.</span></li>
     </ol>
     <button id="welcome-ok" class="primary">Ho capito</button>
@@ -356,18 +356,28 @@ function renderTraining(main: HTMLElement, save: SaveData, state: HubState, acti
 
   const starters = save.lineup.map((uid) => findOwned(save, uid)).filter((p) => p !== undefined);
   const reserves = save.roster.filter((p) => !save.lineup.includes(p.uid));
-  const dots = Array.from({ length: SESSIONS_PER_MATCHDAY }, (_, i) => `<i class="${i < save.sessionsLeft ? 'full' : ''}"></i>`).join('');
+  const dots = (n: number, min: number) => Array.from({ length: Math.max(min, n) }, (_, i) => `<i class="${i < n ? 'full' : ''}"></i>`).join('');
+  const count = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 
   main.innerHTML = `
     <div class="card training-head">
-      <span class="session-dots" title="Sessioni rimaste">${dots}</span>
+      <div class="training-pools">
+        <div>
+          <span class="session-dots" title="Sessioni di allenamento">${dots(save.sessionsLeft, SESSIONS_PER_PLACE)}</span>
+          <b>${save.sessionsLeft ? count(save.sessionsLeft, 'sessione', 'sessioni') : 'Nessuna sessione'}</b> <small class="muted">ATT · DIF · VEL · PV</small>
+          <p class="muted">Migliorano le statistiche. Ne ricevi ${SESSIONS_PER_PLACE} la prima volta che arrivi in un luogo; quelle che non usi restano per dopo.</p>
+        </div>
+        <div>
+          <span class="session-dots sparring" title="Sparring">${dots(save.sparringLeft, SPARRING_PER_MATCH.w)}</span>
+          <b>${save.sparringLeft ? count(save.sparringLeft, 'sparring', 'sparring') : 'Nessuno sparring'}</b> <small class="muted">esperienza</small>
+          <p class="muted">Danno esperienza e si ricaricano dopo ogni partita: ${SPARRING_PER_MATCH.w} se vinci, ${SPARRING_PER_MATCH.d} se pareggi, ${SPARRING_PER_MATCH.l} se perdi.</p>
+        </div>
+      </div>
       <div>
-        <b>${save.sessionsLeft ? `${save.sessionsLeft} ${save.sessionsLeft === 1 ? 'sessione rimasta' : 'sessioni rimaste'}` : 'Sessioni finite per questa giornata'}</b>
-        <p class="muted">Ogni sessione migliora una statistica di un Pokémon (o gli dà esperienza con lo sparring) e si ricarica dopo ogni partita.
-        Il bottone evidenziato è quello che serve di più al suo ruolo.</p>
+        <p class="muted">Il bottone evidenziato è quello che serve di più al ruolo.</p>
         ${cap < MAX_LEVEL ? `<p class="muted"><b>Tetto di livello: ${cap}</b>. Oltre non si guadagna esperienza: si alza a ogni medaglia${save.badges >= 8 ? ' e sparisce quando vinci la Lega' : ''}.</p>` : ''}
       </div>
-      ${save.sessionsLeft ? '' : '<button class="primary" id="go-play">Gioca la partita</button>'}
+      ${save.sessionsLeft || save.sparringLeft ? '' : '<button class="primary" id="go-play">Vai alla mappa</button>'}
     </div>
     ${state.message ? `<div class="toast">${esc(state.message)}</div>` : ''}
     <h3>Titolari</h3>
@@ -375,7 +385,7 @@ function renderTraining(main: HTMLElement, save: SaveData, state: HubState, acti
     ${reserves.length ? `<h3>Riserve <small>— in partita guadagnano meno esperienza: lo sparring le fa crescere</small></h3>
     <div class="tgrid">${reserves.map(card).join('')}</div>` : ''}`;
 
-  document.getElementById('go-play')?.addEventListener('click', () => document.getElementById('play')!.click());
+  document.getElementById('go-play')?.addEventListener('click', () => document.querySelector<HTMLButtonElement>('[data-tab="map"]')!.click());
   main.querySelectorAll<HTMLButtonElement>('button[data-drill]').forEach((b) => {
     b.onclick = () => {
       const p = findOwned(save, b.dataset.uid!);
@@ -532,7 +542,7 @@ function trainerCard(loc: KantoLocation, t: Challenges['trainers'][number], prob
   </div>`;
 }
 
-function renderMap(main: HTMLElement, save: SaveData, ch: Challenges, actions: HubActions) {
+function renderMap(main: HTMLElement, save: SaveData, ch: Challenges, actions: HubActions, message: string | null) {
   const problem = lineupProblem(save);
   const mine = problem ? null : clubTeam(save);
   const loc = ch.location;
@@ -631,6 +641,7 @@ function renderMap(main: HTMLElement, save: SaveData, ch: Challenges, actions: H
 
   main.innerHTML = `
     ${problem ? `<div class="toast warn">${esc(problem)} Vai su Formazione.</div>` : ''}
+    ${message ? `<div class="toast">${esc(message)} Le trovi in Allenamento.</div>` : ''}
     <div class="kanto">
       <div class="card map-card">
         ${mapSvg(save, ch, actions)}
@@ -659,6 +670,8 @@ function renderMap(main: HTMLElement, save: SaveData, ch: Challenges, actions: H
       <summary>Come funziona il gioco</summary>
       <ul>
         <li><b>Mappa</b>: ti sposti nei luoghi vicini; le medaglie aprono nuove zone come nei giochi e dalla Medaglia Tuono puoi volare nelle città già visitate. Sui percorsi ci sono allenatori da battere una volta e la partitella con i selvatici, ripetibile.</li>
+        <li><b>Sconfitta</b>: nessuno guadagna esperienza e hai un solo sparring; col pareggio metà esperienza e 2 sparring.</li>
+        <li><b>Allenamento</b>: le sessioni per le statistiche (EV) arrivano 3 per ogni luogo nuovo, quelle che non usi restano; gli sparring (esperienza) si ricaricano dopo ogni partita. Così grindando sali di livello, ma gli EV crescono solo viaggiando.</li>
         <li><b>Tetto di livello</b>: si cresce fino a 2 livelli sopra la prossima palestra (68 prima della Lega), poi serve la medaglia. Da Campione il tetto sparisce.</li>
         <li><b>Leggendari</b>: Zapdos alla Centrale Elettrica, Articuno alle Isole Spumarine, Moltres sulla Via Vittoria e Mewtwo nella Grotta Ignota (aperta dopo aver vinto la Lega). Guidano una squadra di selvatici: se vinci, si uniscono a te.</li>
         <li><b>Nuovi Pokémon</b>: niente lotte né Poké Ball. Se vinci la partitella con i selvatici, di solito uno chiede di unirsi alla squadra e tu decidi se accettare. Chi evolve si convince più facilmente, i Pokémon già forti e rari molto meno, e conta anche come ha giocato contro di te. La rosa non ha limiti.</li>
