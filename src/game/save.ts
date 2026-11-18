@@ -216,6 +216,41 @@ export function storeSave(save: SaveData) {
   localStorage.setItem(KEY, JSON.stringify(save));
 }
 
+/** Prefisso dei codici di salvataggio (versione del formato). */
+const CODE_PREFIX = 'PKC1.';
+
+/** Codice da copiare per portare la carriera su un altro dispositivo (o tenerla da parte). */
+export function exportSave(save: SaveData): string {
+  const json = JSON.stringify(save);
+  // base64 di UTF-8: i soprannomi possono avere accenti ed emoji
+  const bytes = new TextEncoder().encode(json);
+  let bin = '';
+  for (const b of bytes) bin += String.fromCharCode(b);
+  return CODE_PREFIX + btoa(bin);
+}
+
+/**
+ * Importa un codice di salvataggio: se è valido sostituisce la carriera in memoria e restituisce
+ * null (poi va ricaricata con loadSave, che applica gli aggiornamenti), altrimenti il motivo.
+ */
+export function importSave(code: string): string | null {
+  const text = code.trim().replace(/\s+/g, '');
+  if (!text.startsWith(CODE_PREFIX)) return 'Non sembra un codice di PokéCalcio: deve iniziare con PKC1.';
+  let data: SaveData;
+  try {
+    const bin = atob(text.slice(CODE_PREFIX.length));
+    const bytes = Uint8Array.from(bin, (c) => c.charCodeAt(0));
+    data = JSON.parse(new TextDecoder().decode(bytes));
+  } catch {
+    return 'Il codice è incompleto o rovinato: copialo di nuovo per intero.';
+  }
+  if (data?.version !== 1 || !Array.isArray(data.roster) || !data.roster.every((p) => POKEDEX[p.speciesKey])) {
+    return 'Il codice non contiene una carriera valida.';
+  }
+  localStorage.setItem(KEY, JSON.stringify(data));
+  return null;
+}
+
 export function findOwned(save: SaveData, uid: string | null): OwnedPokemon | undefined {
   return uid ? save.roster.find((p) => p.uid === uid) : undefined;
 }
