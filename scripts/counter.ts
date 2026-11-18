@@ -14,6 +14,8 @@ import { buildGymTeam, clubTeam, simulateMatch } from '../src/match/teams';
 // prova: capipalestra più alti di GLV livelli con il tetto invariato, ed eventuale allenamento uguale per tutti
 if (process.env.GLV) { const b = Number(process.env.GLV); GYMS.forEach((g) => (g.level += b)); CAP.margin -= b; }
 if (process.env.GTR) GYMS.forEach((g) => (g.training = Number(process.env.GTR)));
+// prova su singole palestre: GSET='{"0":{"training":0.8,"extraLevels":2}}'
+if (process.env.GSET) for (const [i, v] of Object.entries(JSON.parse(process.env.GSET))) Object.assign(GYMS[Number(i)], v);
 const N = Number(process.argv[2] ?? 100);
 const ONLY = process.env.GYM_ONLY ? Number(process.env.GYM_ONLY) : null;
 const tot = [0, 0];
@@ -48,7 +50,7 @@ for (let g = 0; g < GYMS.length; g++) {
   let w = 0;
   let d = 0;
   for (let i = 0; i < N; i++) {
-    const m = simulateMatch(clubTeam(save), buildGymTeam(gym, clubTeam(save)), false);
+    const m = simulateMatch(clubTeam(save), buildGymTeam(gym, clubTeam(save)), true); // ai rigori se pari
     if (m.winner === 0) w++;
     d += m.score[0] - m.score[1];
   }

@@ -41,26 +41,26 @@ export interface Gym {
 
 export const GYMS: Gym[] = [
   {
-    leader: 'Brock', city: 'Plumbeopoli', type: 'rock', badge: 'Medaglia Sasso', level: 30, color: '#9c8a6e', training: 0.45,
+    leader: 'Brock', city: 'Plumbeopoli', type: 'rock', badge: 'Medaglia Sasso', level: 30, color: '#9c8a6e', training: 0.05,
     formation: 'quadrato', signature: 'onix', counter: 'oddish',
     // Rosso/Blu: Geodude, Onix
     pool: ['geodude', 'chewtle', 'archen', 'aerodactyl', 'aron', 'lileep', 'corsola', 'shuckle', 'oddish'],
   },
   {
-    leader: 'Misty', city: 'Celestopoli', type: 'water', badge: 'Medaglia Cascata', level: 34, color: '#6aaecb', training: 0.4,
+    leader: 'Misty', city: 'Celestopoli', type: 'water', badge: 'Medaglia Cascata', level: 34, color: '#6aaecb', training: 0.5,
     formation: 'rombo', signature: 'staryu', counter: 'numel',
     // Rosso/Blu: Staryu, Starmie
     pool: ['barboach', 'wimpod', 'tentacool', 'dracovish', 'tatsugiri', 'qwilfish', 'lotad', 'chinchou', 'numel'],
   },
   {
-    leader: 'Lt. Surge', city: 'Aranciopoli', type: 'electric', badge: 'Medaglia Tuono', level: 38, color: '#e8a317', training: 0.95,
+    leader: 'Lt. Surge', city: 'Aranciopoli', type: 'electric', badge: 'Medaglia Tuono', level: 38, color: '#e8a317', training: 1, extraLevels: 1,
     formation: 'rombo', signature: 'pikachu', counter: 'spheal',
     // Rosso/Blu: Voltorb, Pikachu, Raichu
     // contro chi porta tanti Terra: Chinchou (Acqua), Wattrel ed Emolga (Volante, immuni) e Spheal (la contromossa)
     pool: ['voltorb', 'grubbin', 'chinchou', 'wattrel', 'emolga', 'stunfisk', 'joltik', 'dracozolt', 'spheal'],
   },
   {
-    leader: 'Erika', city: 'Azzurropoli', type: 'grass', badge: 'Medaglia Arcobaleno', level: 43, color: '#4fb393', training: 0.95, extraLevels: 1,
+    leader: 'Erika', city: 'Azzurropoli', type: 'grass', badge: 'Medaglia Arcobaleno', level: 43, color: '#4fb393', training: 1, extraLevels: 4,
     formation: 'rombo', signature: 'oddish', counter: 'roggenrola',
     // Rosso/Blu: Victreebel, Tangela, Vileplume
     pool: ['bellsprout', 'tangela', 'ferroseed', 'lileep', 'lotad', 'snover', 'rowlet', 'toedscool', 'roggenrola'],
@@ -78,7 +78,7 @@ export const GYMS: Gym[] = [
     pool: ['mr-mime', 'venonat', 'staryu', 'stantler', 'beldum', 'blipbug', 'fennekin', 'baltoy', 'inkay'],
   },
   {
-    leader: 'Blaine', city: 'Isola Cannella', type: 'fire', badge: 'Medaglia Vulcano', level: 58, color: '#f08a5d', training: 0.85, extraLevels: 1,
+    leader: 'Blaine', city: 'Isola Cannella', type: 'fire', badge: 'Medaglia Vulcano', level: 58, color: '#f08a5d', training: 0.85,
     formation: 'rombo', signature: 'growlithe', counter: 'turtwig',
     // Rosso/Blu: Growlithe, Ponyta, Rapidash, Arcanine
     pool: ['ponyta', 'capsakid', 'rolycoly', 'fletchling', 'numel', 'oricorio', 'turtonator', 'larvesta', 'turtwig'],
