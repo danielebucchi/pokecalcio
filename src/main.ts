@@ -17,8 +17,15 @@ import {
 import { renderHub, type ChallengeKind, type Challenges, type HubState } from './ui/hub';
 import { runMatch, skipMatch, type MatchBanner } from './ui/matchScreen';
 import { renderStarterPick } from './ui/starters';
+import { installTypeInfo } from './ui/typeInfo';
+import { setupPwa } from './ui/pwa';
 
 const app = document.getElementById('app')!;
+installTypeInfo();
+// app installabile: quando cambia la possibilità di installare, si ridisegna il bottone
+setupPwa(() => {
+  if (document.querySelector('.hub-foot')) showHub();
+});
 let save: SaveData = loadSave();
 const hub: HubState = { tab: 'squad', message: null, slot: 0 };
 

@@ -1,3 +1,5 @@
+import { installMode, promptInstall } from './pwa';
+import { matchupRows, suggestedLineup } from '../game/matchup';
 import { whereToFind } from '../game/dexGuide';
 import { ACHIEVEMENTS, ACHIEVEMENT_SESSIONS, achievementById } from '../game/achievements';
 import { POKEDEX, TYPE_NAMES, type PokeType } from '../data/pokedex';
@@ -15,7 +17,7 @@ import {
   applyDrill, currentStats, drillBlock, drillPreview, drillStat, expToNext, suggestedDrill, type Drill,
 } from '../game/progression';
 import {
-  BENCH_MAX, ROSTER_MAX, SESSIONS_PER_PLACE, autoBench, autoLineup, benchOf, bestRating, bestRole, eventChoices, eventState, eventsFound as eventsTaken, exportSave, releasable, depositPokemon, boxLock, withdrawPokemon, TO_BOX, rivalGate, teachTechnique, techniquesAvailable, trainerById as routeTrainer, findOwned, lineupProblem, ratingsOf,
+  BENCH_MAX, ROSTER_MAX, SESSIONS_PER_PLACE, autoBench, autoLineup, benchOf, bestRating, bestRole, eventChoices, eventState, eventsFound as eventsTaken, exportSave, releasable, depositPokemon, undoDeposit, boxLock, withdrawPokemon, TO_BOX, rivalGate, teachTechnique, techniquesAvailable, trainerById as routeTrainer, findOwned, lineupProblem, ratingsOf,
   type OwnedPokemon, type SaveData,
 } from '../game/save';
 import type { PokemonInstance, Role } from '../game/stats';
@@ -51,6 +53,9 @@ export interface Challenges {
   rematch: TeamSetup | null;
 }
 
+/** L'invito a installare l'app è stato chiuso (resta il link in fondo alla pagina). */
+const INSTALL_DISMISS_KEY = 'pokecalcio-install-dismissed';
+
 export interface HubState {
   tab: HubTab;
   /** Esito dell'ultima sessione di allenamento. */
@@ -59,6 +64,11 @@ export interface HubState {
   slot: number;
   /** Pokémon che stai per lasciare andare (aspetta il secondo tocco). */
   releasing?: string | null;
+  /** Ordine e filtro per tipo di tribuna e PC di Bill. */
+  sort?: RosterSort;
+  typeFilter?: PokeType | '';
+  /** Pokémon appena mandato nel PC: si può annullare per qualche secondo. */
+  undo?: string | null;
   /** Pokémon del Box da ritirare, in attesa di scegliere chi ci va al suo posto (rosa piena). */
   withdrawing?: string | null;
   /** Tecnica che stai per insegnare, "tecnica:uid" (aspetta il secondo tocco). */
@@ -125,11 +135,13 @@ function strength(team: TeamSetup): number {
 export function renderHub(app: HTMLElement, save: SaveData, ch: Challenges, state: HubState, actions: HubActions) {
   const r = save.record;
   const problem = lineupProblem(save);
+  // pallini sulle schede: qualcosa da fare lì dentro
+  const rewardsReady = SIDE_MISSIONS.filter((m) => missionComplete(save, m) && !save.rewards.includes(m.id)).length;
   const tabs: [HubTab, string, string][] = [
     ['squad', 'Formazione', ''],
-    ['training', 'Allenamento', save.sessionsLeft ? `<span class="badge">${save.sessionsLeft}</span>` : ''],
+    ['training', 'Allenamento', save.sessionsLeft ? `<span class="badge">${save.sessionsLeft}</span>` : techniquesAvailable(save).length ? '<span class="badge" title="Tecniche da insegnare">!</span>' : ''],
     ['map', '<span class="lbl-long">Mappa di Kanto</span><span class="lbl-short">Mappa</span>', ''],
-    ['missions', 'Missioni', ''],
+    ['missions', 'Missioni', rewardsReady ? `<span class="badge" title="Premi da ritirare">${rewardsReady}</span>` : ''],
   ];
   const showWelcome = save.matchday === 1 && !localStorage.getItem(WELCOME_KEY);
 
@@ -157,12 +169,27 @@ export function renderHub(app: HTMLElement, save: SaveData, ch: Challenges, stat
       ${headerGoal(save, ch, problem)}
     </header>
     ${showWelcome ? welcomeHtml() : ''}
+    ${installMode() && !localStorage.getItem(INSTALL_DISMISS_KEY) ? `<section class="card install-card">
+      <img src="/icons/icon-192.png" alt="">
+      <div><b>Installa PokéCalcio</b>
+      <small class="muted">${installMode() === 'ios'
+        ? 'Si apre a schermo intero dalla Home, funziona anche senza rete e Safari non cancella il salvataggio. In Safari tocca <b>Condividi</b> (il quadrato con la freccia) e poi <b>«Aggiungi alla schermata Home»</b>.'
+        : 'Si apre a schermo intero come un\'app, funziona anche senza rete e il salvataggio è più al sicuro.'}</small></div>
+      <span class="nudge-actions">${installMode() === 'prompt' ? '<button class="primary" data-install>Installa</button>' : ''}<button class="link" data-install-dismiss>${installMode() === 'ios' ? 'Ho capito' : 'No grazie'}</button></span>
+    </section>` : ''}
+    ${save.badges > (save.backupBadges ?? 0) ? `<section class="card backup-nudge">
+      <span class="ach-icon">💾</span>
+      <div><b>Hai una medaglia in più: salva una copia della carriera</b>
+      <small class="muted">Il salvataggio vive solo in questo browser: se cancelli i dati o cambi telefono lo perdi. Il codice si reimporta da «Importa salvataggio».</small></div>
+      <span class="nudge-actions"><button class="primary" data-backup="export">Esporta ora</button><button class="link" data-backup="later">Più tardi</button></span>
+    </section>` : ''}
     <nav class="tabs">${tabs.map(([k, l, extra]) => `<button data-tab="${k}" class="${state.tab === k ? 'on' : ''}">${l}${extra}</button>`).join('')}</nav>
     <main id="tab"></main>
     <footer class="hub-foot">
       ${savePanelHtml(save, state)}
       <button class="link" data-save-panel="export">Esporta salvataggio</button>
       <button class="link" data-save-panel="import">Importa salvataggio</button>
+      ${installMode() ? '<button class="link" data-install-again>Installa l\'app</button>' : ''}
       <button id="reset" class="link">Ricomincia la carriera da zero</button>
     </footer>`;
 
@@ -170,6 +197,7 @@ export function renderHub(app: HTMLElement, save: SaveData, ch: Challenges, stat
     b.onclick = () => {
       state.tab = b.dataset.tab as HubTab;
       state.message = null;
+      state.undo = null;
       renderHub(app, save, ch, state, actions);
     };
   });
@@ -190,10 +218,38 @@ export function renderHub(app: HTMLElement, save: SaveData, ch: Challenges, stat
     renderHub(app, save, ch, state, actions);
   });
   // esporta / importa: un pannello sopra i link in fondo
+  // installazione come app
+  app.querySelector<HTMLButtonElement>('[data-install]')?.addEventListener('click', () => void promptInstall());
+  app.querySelector<HTMLButtonElement>('[data-install-dismiss]')?.addEventListener('click', () => {
+    localStorage.setItem(INSTALL_DISMISS_KEY, '1');
+    renderHub(app, save, ch, state, actions);
+  });
+  app.querySelector<HTMLButtonElement>('[data-install-again]')?.addEventListener('click', () => {
+    if (installMode() === 'prompt') return void promptInstall();
+    localStorage.removeItem(INSTALL_DISMISS_KEY);
+    renderHub(app, save, ch, state, actions);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  });
+  // promemoria di backup: una volta per medaglia
+  app.querySelectorAll<HTMLButtonElement>('[data-backup]').forEach((b) => {
+    b.onclick = () => {
+      save.backupBadges = save.badges;
+      if (b.dataset.backup === 'export') state.savePanel = 'export';
+      actions.changed();
+      if (state.savePanel === 'export') app.querySelector('.save-panel')?.scrollIntoView({ block: 'center' });
+    };
+  });
   app.querySelectorAll<HTMLButtonElement>('[data-save-panel]').forEach((b) => {
     b.onclick = () => {
       const which = b.dataset.savePanel as 'export' | 'import';
       state.savePanel = state.savePanel === which ? null : which;
+      // esportata a mano: il promemoria aspetta la prossima medaglia
+      if (state.savePanel === 'export' && save.badges > (save.backupBadges ?? 0)) {
+        save.backupBadges = save.badges;
+        actions.changed();
+        app.querySelector('.save-panel')?.scrollIntoView({ block: 'center' });
+        return;
+      }
       state.importError = null;
       state.importConfirm = false;
       renderHub(app, save, ch, state, actions);
@@ -417,7 +473,7 @@ function headerGoal(save: SaveData, ch: Challenges, problem: string | null): str
   if (ch.gym) {
     return `<div class="next" style="--team:${ch.gym.color}">
         <small>${here} · palestra di livello ${gymLevel(ch.gym)}</small>
-        <span class="next-name">${esc(ch.gym.leader)} <span class="chip type-chip" style="--team:${ch.gym.color}">${TYPE_NAMES[ch.gym.type]}</span></span>
+        <span class="next-name">${esc(ch.gym.leader)} <span class="chip type-chip" data-type="${ch.gym.type}" style="--team:${ch.gym.color}">${TYPE_NAMES[ch.gym.type]}</span></span>
       </div>
       <button id="play" class="primary big" ${problem ? 'disabled' : ''} title="${esc(problem ?? `Sfida ${ch.gym.leader} per la ${ch.gym.badge}`)}">Sfida ${esc(ch.gym.leader)}</button>`;
   }
@@ -502,8 +558,10 @@ function renderSquad(main: HTMLElement, save: SaveData, state: HubState, actions
     })
     .join('');
 
+  const undone = state.undo ? save.box.find((p) => p.uid === state.undo) : undefined;
   main.innerHTML = `
     ${state.message ? `<div class="toast">${esc(state.message)}</div>` : ''}
+    ${undone ? `<div class="toast undo-toast">${nameOf(undone)} è stato trasferito nel PC di Bill! <button data-undo>Annulla</button></div>` : ''}
     <div class="squad">
       <div>
         <div class="pitch-mini">${pitch}</div>
@@ -582,9 +640,31 @@ function renderSquad(main: HTMLElement, save: SaveData, state: HubState, actions
         return;
       }
       state.releasing = null;
-      depositPokemon(save, uid);
+      if (depositPokemon(save, uid)) {
+        // si può tornare indietro per qualche secondo
+        state.undo = uid;
+        setTimeout(() => {
+          if (state.undo !== uid) return;
+          state.undo = null;
+          if (main.isConnected && state.tab === 'squad') renderSquad(main, save, state, actions);
+        }, UNDO_MS);
+      }
       actions.changed();
     };
+  });
+  main.querySelector<HTMLButtonElement>('[data-undo]')?.addEventListener('click', () => {
+    if (state.undo) undoDeposit(save, state.undo);
+    state.undo = null;
+    actions.changed();
+  });
+  // ordine e filtro di tribuna e PC
+  main.querySelector<HTMLSelectElement>('[data-sort]')?.addEventListener('change', (e) => {
+    state.sort = (e.target as HTMLSelectElement).value as RosterSort;
+    renderSquad(main, save, state, actions);
+  });
+  main.querySelector<HTMLSelectElement>('[data-type-filter]')?.addEventListener('change', (e) => {
+    state.typeFilter = (e.target as HTMLSelectElement).value as PokeType | '';
+    renderSquad(main, save, state, actions);
   });
   // PC di Bill: ritiro (con la rosa piena si sceglie chi ci va al suo posto)
   main.querySelectorAll<HTMLButtonElement>('[data-withdraw]').forEach((b) => {
@@ -612,8 +692,7 @@ function renderSquad(main: HTMLElement, save: SaveData, state: HubState, actions
 function boxHtml(save: SaveData, state: HubState): string {
   if (!save.box.length) return '';
   const lock = boxLock(save);
-  const rows = [...save.box]
-    .sort((a, b) => POKEDEX[a.speciesKey].dex - POKEDEX[b.speciesKey].dex)
+  const rows = sortFilter(save.box, state)
     .map((p) => {
       const { role: best } = bestRole(p);
       const picking = state.withdrawing === p.uid;
@@ -636,9 +715,37 @@ function boxHtml(save: SaveData, state: HubState): string {
   </details>`;
 }
 
+/** Per quanto resta il bottone Annulla dopo un deposito nel PC. */
+const UNDO_MS = 8000;
+
+type RosterSort = 'voto' | 'livello' | 'dex' | 'nome';
+const SORTS: [RosterSort, string][] = [['voto', 'Voto'], ['livello', 'Livello'], ['dex', 'N° Pokédex'], ['nome', 'Nome']];
+
+/** Tribuna e PC ordinati e filtrati come scelto nella barra sopra la tribuna. */
+function sortFilter(list: OwnedPokemon[], state: HubState): OwnedPokemon[] {
+  const t = state.typeFilter;
+  const out = t ? list.filter((p) => POKEDEX[p.speciesKey].types.includes(t)) : [...list];
+  const key = state.sort ?? 'voto';
+  const name = (p: OwnedPokemon) => p.nickname || POKEDEX[p.speciesKey].name;
+  return out.sort((a, b) =>
+    key === 'voto' ? bestRating(b) - bestRating(a)
+    : key === 'livello' ? b.level - a.level || bestRating(b) - bestRating(a)
+    : key === 'dex' ? POKEDEX[a.speciesKey].dex - POKEDEX[b.speciesKey].dex
+    : name(a).localeCompare(name(b), 'it'));
+}
+
+function sortBarHtml(save: SaveData, state: HubState): string {
+  const types = [...new Set([...save.roster, ...save.box].flatMap((p) => POKEDEX[p.speciesKey].types))].sort((a, b) => TYPE_NAMES[a].localeCompare(TYPE_NAMES[b], 'it'));
+  return `<div class="sort-bar">
+    <label>Ordina <select data-sort>${SORTS.map(([k, l]) => `<option value="${k}" ${(state.sort ?? 'voto') === k ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
+    <label>Tipo <select data-type-filter><option value="">tutti</option>${types.map((t) => `<option value="${t}" ${state.typeFilter === t ? 'selected' : ''}>${TYPE_NAMES[t]}</option>`).join('')}</select></label>
+  </div>`;
+}
+
 /** Panchina (le uniche riserve che entrano in partita) e il resto della rosa, in tribuna. */
 function benchHtml(save: SaveData, bench: OwnedPokemon[], state: HubState): string {
-  const stands = save.roster.filter((p) => !save.lineup.includes(p.uid) && !bench.includes(p));
+  const allStands = save.roster.filter((p) => !save.lineup.includes(p.uid) && !bench.includes(p));
+  const stands = sortFilter(allStands, state);
   const full = bench.length >= BENCH_MAX;
   const row = (p: OwnedPokemon, inBench: boolean) => {
     const { role: best } = bestRole(p);
@@ -657,7 +764,8 @@ function benchHtml(save: SaveData, bench: OwnedPokemon[], state: HubState): stri
     <h3>Panchina <small>${bench.length}/${BENCH_MAX} · in partita possono entrare solo loro</small></h3>
     ${bench.length ? bench.map((p) => row(p, true)).join('') : '<p class="muted">Nessuno in panchina: senza riserve non potrai fare cambi.</p>'}
     <h3>Tribuna <small>rosa ${save.roster.length}/${ROSTER_MAX}</small></h3>
-    ${stands.length ? stands.map((p) => row(p, false)).join('') : '<p class="muted">Tutta la rosa è in campo o in panchina.</p>'}
+    ${allStands.length > 2 || save.box.length > 2 ? sortBarHtml(save, state) : ''}
+    ${stands.length ? stands.map((p) => row(p, false)).join('') : allStands.length ? '<p class="muted">Nessuno di questo tipo in tribuna.</p>' : '<p class="muted">Tutta la rosa è in campo o in panchina.</p>'}
     ${save.roster.length > ROSTER_MAX ? `<p class="toast warn">La rosa supera il limite di ${ROSTER_MAX}: per far posto ai nuovi Pokémon mandane qualcuno nel PC.</p>` : ''}
   </section>`;
 }
@@ -988,6 +1096,31 @@ function typeHints(save: SaveData, type: PokeType): string {
   </div>`;
 }
 
+/** Etichetta di un tipo: toccandola si apre la sua tabella (vedi typeInfo.ts). */
+export const typeChip = (t: PokeType) => `<span class="chip type-tag" data-type="${t}">${TYPE_NAMES[t]}</span>`;
+
+/** Confronto di tipo con la squadra avversaria e formazione consigliata (`key`: quale sfida). */
+function matchupHtml(save: SaveData, them: TeamSetup, key: string): string {
+  const chips = (ps: OwnedPokemon[], cls: string) =>
+    ps.length
+      ? ps.map((p) => `<span class="chip ${cls} ${save.lineup.includes(p.uid) ? 'in-lineup' : ''}">${nameOf(p)}</span>`).join(' ')
+      : '<span class="muted">nessuno</span>';
+  const rows = matchupRows(save, them)
+    .map((r) => `<div class="mu-row">
+      <span class="mu-them"><img src="${spriteUrl(POKEDEX[r.form].dex)}" alt=""><span><b>${esc(POKEDEX[r.form].name)}</b> <small>Lv${r.level}</small> ${r.types.map(typeChip).join(' ')}</span></span>
+      <span class="mu-list"><small>Lo battono</small><span>${chips(r.strong, 'chip-mint')}</span></span>
+      <span class="mu-list"><small>Ne soffrono</small><span>${chips(r.weak, 'chip-pink')}</span></span>
+    </div>`)
+    .join('');
+  return `<div class="matchup">
+    <div class="mu-actions">
+      <button class="primary" data-suggest="${key}">✦ Formazione consigliata</button>
+      <small class="muted">sceglie titolari e panchina tenendo conto dei tipi, nel modulo che usi</small>
+    </div>
+    <details class="fold"><summary><b>Confronto di tipo</b> <small class="muted">chi dei tuoi è forte o debole contro ognuno · con il bordo i titolari</small></summary>${rows}</details>
+  </div>`;
+}
+
 const trainerTypeLabel = (t: LeagueTrainer) => (t.type ? TYPE_NAMES[t.type] : 'Mista');
 
 function leagueCard(save: SaveData, league: NonNullable<Challenges['league']>, mine: TeamSetup | null, problem: string | null, championTeam: TeamSetup | null): string {
@@ -1050,8 +1183,8 @@ function leagueCard(save: SaveData, league: NonNullable<Challenges['league']>, m
       ${action}
     </div>
     ${run ? `<div class="bracket">${columns}<div class="bk-col bk-champ"><small class="muted">Campione</small><div class="bk-list"><div class="bk-match"><div class="bk-row win">${champ}</div></div></div></div></div>` : ''}
-    ${opponent?.type ? typeHints(save, opponent.type) : ''}
     ${mine && team && (opponent || team === championTeam) ? forecastHtml(mine, team) : ''}
+    ${team && (opponent || team === championTeam) ? matchupHtml(save, team, 'league') : ''}
     ${team && (opponent || championTeam) ? `<details><summary>Squadra di ${esc(championTeam && team === championTeam ? 'Blu, Campione' : opponent!.name)}</summary>${teamTable(team)}</details>` : ''}
   </section>`;
 }
@@ -1184,13 +1317,13 @@ function renderMap(main: HTMLElement, save: SaveData, ch: Challenges, actions: H
           ${medalHtml(loc.gym, true)}
           <div>
             <small class="muted">Palestra di ${esc(ch.gym.city)} · livello ${gymLevel(ch.gym)}</small>
-            <h2>${esc(ch.gym.leader)} <span class="chip type-chip" style="--team:${ch.gym.color}">${TYPE_NAMES[ch.gym.type]}</span></h2>
+            <h2>${esc(ch.gym.leader)} <span class="chip type-chip" data-type="${ch.gym.type}" style="--team:${ch.gym.color}">${TYPE_NAMES[ch.gym.type]}</span></h2>
             <p class="muted">Vinci per la <b>${esc(ch.gym.badge)}</b>. In campo sempre l'asso <b>${esc(POKEDEX[evolvedForm(ch.gym.signature, gymLevel(ch.gym))].name)}</b> e la contromossa <b>${esc(POKEDEX[evolvedForm(ch.gym.counter, gymLevel(ch.gym))].name)}</b>; gli altri li sceglie <b>studiando la tua squadra</b>: se porti tanti Pokémon di un tipo, lui porta chi li batte. La squadra è già evoluta quanto il livello permette.</p>
           </div>
           <button class="primary big" data-play="gym" ${problem ? 'disabled' : ''}>Sfida ${esc(ch.gym.leader)}</button>
         </div>
-        ${typeHints(save, ch.gym.type)}
         ${mine ? forecastHtml(mine, ch.gymTeam) : ''}
+        ${matchupHtml(save, ch.gymTeam, 'gym')}
         <details><summary>Squadra di ${esc(ch.gym.leader)}</summary>${teamTable(ch.gymTeam)}</details>
       </section>`;
     } else if (loc.gym < save.badges && ch.rematch) {
@@ -1200,12 +1333,13 @@ function renderMap(main: HTMLElement, save: SaveData, ch: Challenges, actions: H
           ${medalHtml(loc.gym, true)}
           <div>
             <small class="muted">Rivincita · ${esc(g.badge)} già tua · livello ${ch.rematch.roster[0].inst.level}</small>
-            <h2>${esc(g.leader)} <span class="chip type-chip" style="--team:${g.color}">${TYPE_NAMES[g.type]}</span></h2>
+            <h2>${esc(g.leader)} <span class="chip type-chip" data-type="${g.type}" style="--team:${g.color}">${TYPE_NAMES[g.type]}</span></h2>
             <p class="muted">Dopo il tuo titolo ${esc(g.leader)} si è allenato: squadra evoluta e al massimo. Puoi sfidarlo quando vuoi.</p>
           </div>
           <button class="primary big" data-play="rematch" ${problem ? 'disabled' : ''}>Rivincita</button>
         </div>
         ${mine ? forecastHtml(mine, ch.rematch) : ''}
+        ${matchupHtml(save, ch.rematch, 'rematch')}
         <details><summary>Squadra di ${esc(g.leader)}</summary>${teamTable(ch.rematch)}</details>
       </section>`;
     } else if (loc.gym < save.badges) {
@@ -1227,7 +1361,7 @@ function renderMap(main: HTMLElement, save: SaveData, ch: Challenges, actions: H
           <img class="legend-sprite" src="${spriteUrl(sp.dex)}" alt="">
           <div>
             <small class="muted">Leggendario · livello ${boss.level}</small>
-            <h2>${esc(sp.name)} ${sp.types.map((t) => `<span class="chip type-chip" style="--team:#e8a317">${TYPE_NAMES[t]}</span>`).join(' ')}</h2>
+            <h2>${esc(sp.name)} ${sp.types.map((t) => `<span class="chip type-chip" data-type="${t}" style="--team:#e8a317">${TYPE_NAMES[t]}</span>`).join(' ')}</h2>
             <p class="muted">Gioca con 4 selvatici di questa zona, senza cambi. <b>Se vinci, si unisce a te.</b> Se perdi puoi riprovare quando vuoi.</p>
           </div>
           <button class="primary big" data-play="legendary" ${problem ? 'disabled' : ''}>Sfida ${esc(sp.name)}</button>
@@ -1379,6 +1513,19 @@ function renderMap(main: HTMLElement, save: SaveData, ch: Challenges, actions: H
     }
   };
   centerMap();
+  // formazione consigliata contro la squadra della sfida
+  main.querySelectorAll<HTMLButtonElement>('[data-suggest]').forEach((b) => {
+    b.onclick = () => {
+      const key = b.dataset.suggest;
+      const them = key === 'gym' ? ch.gymTeam : key === 'rematch' ? ch.rematch : (ch.champion ?? ch.league?.team ?? null);
+      if (!them) return;
+      const { lineup, bench } = suggestedLineup(save, them);
+      save.lineup = lineup;
+      save.bench = bench;
+      state.message = `Formazione consigliata contro ${them.name}: fatto. Puoi ritoccarla in Formazione.`;
+      actions.changed();
+    };
+  });
   main.querySelectorAll<HTMLButtonElement>('[data-play]').forEach((b) => {
     b.onclick = () => {
       if (!lineupProblem(save)) actions.play(b.dataset.play as ChallengeKind);

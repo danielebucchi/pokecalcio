@@ -6,6 +6,7 @@ import { TO_BOX, ratingsOf } from '../game/save';
 import { Match, MAX_SUBS, SIM_PER_MINUTE, formName, isActive, type MatchEvent, type Player, type TeamSetup } from '../match/engine';
 import { ACHIEVEMENT_SESSIONS, type Achievement } from '../game/achievements';
 import { Renderer } from '../match/renderer';
+import { closeCoach, coach, type CoachStep } from './coach';
 import { ReplayRecorder, clipDuration, frameAt, type Snapshot } from '../match/replay';
 import { esc } from './common';
 import { medalHtml, spriteUrl } from './sprites';
@@ -75,6 +76,18 @@ export interface MatchCallbacks {
   /** Torna all'hub: `counted` è false se la partita è stata abbandonata. */
   onLeave(counted?: boolean): void;
 }
+
+const COACH_KEY = 'pokecalcio-coach-match';
+const REPLAY_TIP_KEY = 'pokecalcio-coach-replay';
+
+/** Fumetti della prima partita. */
+const MATCH_TOUR: CoachStep[] = [
+  { target: '#pitch', title: 'La partita si gioca da sola', text: 'I tuoi Pokémon corrono, passano e tirano da soli: tu fai l\'allenatore, con evoluzioni e cambi.' },
+  { target: '.pcard', title: 'Evoluzioni', text: 'La barra viola si riempie giocando: quando la carta si illumina tocca Evolvi (o premi 1–5). Evolvere rende più forti e fa recuperare un po\' di PV.' },
+  { target: '.sub-btn', title: 'Cambi', text: 'Fai entrare una riserva della panchina. Ne hai due a partita e chi esce non rientra: tienili per chi va KO o è stanco.' },
+  { target: '.speed', title: 'Velocità', text: 'Accelera fino a 8×: la scelta resta per le prossime partite. Con Spazio metti in pausa.' },
+  { target: '.controls .toggle', title: 'Evoluzione automatica', text: 'Se non vuoi pensarci, i tuoi Pokémon evolvono da soli appena possono.' },
+];
 
 /** Nel resoconto: il nuovo arrivato è andato direttamente nel PC. */
 const BOX_LABEL = '\u0000box';
@@ -189,6 +202,13 @@ export function runMatch(app: HTMLElement, teams: [TeamSetup, TeamSetup], cb: Ma
       recorder.goal((clip) => {
         lastClip = clip;
         replayBtn.hidden = false;
+        // il primo replay disponibile: un fumetto lo segnala, una volta sola
+        if (!localStorage.getItem(REPLAY_TIP_KEY) && localStorage.getItem(COACH_KEY)) {
+          localStorage.setItem(REPLAY_TIP_KEY, '1');
+          const was = paused;
+          setPaused(true);
+          coach([{ target: '#replay', title: 'Rivedi il gol', text: 'Dopo ogni gol puoi rivederlo al rallentatore da qui, o con il ▶ accanto al gol nella cronaca.' }], () => setPaused(was));
+        }
         const b = document.createElement('button');
         b.className = 'replay-btn';
         b.title = 'Rivedi il gol al rallentatore';
@@ -436,10 +456,19 @@ export function runMatch(app: HTMLElement, teams: [TeamSetup, TeamSetup], cb: Ma
     raf = requestAnimationFrame(frame);
   };
   const cleanup = () => {
+    closeCoach();
     cancelAnimationFrame(raf);
     window.removeEventListener('keydown', onKey);
     stopMusic();
   };
+  // la prima partita: fumetti che spiegano cosa puoi fare (a partita ferma)
+  if (!localStorage.getItem(COACH_KEY)) {
+    setPaused(true);
+    coach(MATCH_TOUR, () => {
+      localStorage.setItem(COACH_KEY, '1');
+      setPaused(false);
+    });
+  }
   raf = requestAnimationFrame(frame);
   return cleanup;
 }
@@ -476,7 +505,7 @@ function showPostMatch(
     return `<div class="offer" data-offer="${i}">
       <img src="${spriteUrl(sp.dex)}" alt="">
       <div class="offer-body">
-        <span class="offer-title"><b>${esc(sp.name)}</b>${ownedBall(roster?.().species.filter((k) => k === o.inst.speciesKey).length ?? 0)} <small>Lv${o.inst.level}</small> ${sp.types.map((t) => `<span class="chip">${TYPE_NAMES[t]}</span>`).join(' ')}</span>
+        <span class="offer-title"><b>${esc(sp.name)}</b>${ownedBall(roster?.().species.filter((k) => k === o.inst.speciesKey).length ?? 0)} <small>Lv${o.inst.level}</small> ${sp.types.map((t) => `<span class="chip type-tag" data-type="${t}">${TYPE_NAMES[t]}</span>`).join(' ')}</span>
         <div class="pick-stats"><span>ATT <b>${g.att}</b></span><span>DIF <b>${g.dif}</b></span><span>VEL <b>${g.vel}</b></span><span>PV <b>${g.pv}</b></span>
           <span><span class="role role-${best}">${best}</span> voto ${Math.round(ratings[best])}</span></div>
         <small class="muted">Vuole unirsi a te: ${esc(o.reason)}.</small>
@@ -604,17 +633,19 @@ function showPostMatch(
         ? `<span class="chip chip-mint">Preso! ✦</span> <small class="muted">${esc(name)} è stato trasferito nel PC di Bill!</small>`
         : `<span class="chip chip-mint">Preso! ✦</span>${released ? ` <small class="muted">${esc(released)} è stato trasferito nel PC di Bill!</small>` : ''}`;
   };
-  app.querySelectorAll<HTMLButtonElement>('[data-accept]').forEach((b) => {
-    b.onclick = () => {
-      const i = Number(b.dataset.accept);
+  // ogni offerta: Cattura (con la rosa piena si sceglie chi va nel PC) o Libera (annullabile)
+  const bindOffer = (i: number, box: HTMLElement, buttons: string) => {
+    const restore = () => {
+      box.classList.remove('swap');
+      box.innerHTML = buttons;
+      bindOffer(i, box, buttons);
+    };
+    box.querySelector<HTMLButtonElement>('[data-accept]')!.onclick = () => {
       const st = roster?.();
       if (!st || st.count < st.max) {
         if (recruit?.(offers[i].inst) !== false) joined(i);
         return;
       }
-      // rosa piena: si sceglie chi va nel PC di Bill (anche lui stesso)
-      const box = app.querySelector<HTMLElement>(`[data-offer="${i}"] .offer-actions`)!;
-      const keep = box.innerHTML;
       box.classList.add('swap');
       box.innerHTML = `<p class="swap-title">Rosa piena (${st.count}/${st.max}): chi mandi nel PC di Bill?</p>
         <div class="swap-list"><button data-release="${TO_BOX}">📦 Lui direttamente</button>${st.releasable
@@ -629,21 +660,16 @@ function showPostMatch(
           if (recruit?.(offers[i].inst, uid) !== false) joined(i, out);
         };
       });
-      box.querySelector<HTMLButtonElement>('[data-cancel]')!.onclick = () => {
-        box.classList.remove('swap');
-        box.innerHTML = keep;
-        box.querySelector<HTMLButtonElement>('[data-accept]')!.onclick = b.onclick;
-        box.querySelector<HTMLButtonElement>('[data-decline]')!.onclick = () => {
-          box.innerHTML = '<span class="chip">Liberato</span>';
-        };
-      };
+      box.querySelector<HTMLButtonElement>('[data-cancel]')!.onclick = restore;
     };
-  });
-  app.querySelectorAll<HTMLButtonElement>('[data-decline]').forEach((b) => {
-    b.onclick = () => {
-      const i = Number(b.dataset.decline);
-      app.querySelector(`[data-offer="${i}"] .offer-actions`)!.innerHTML = '<span class="chip">Liberato</span>';
+    box.querySelector<HTMLButtonElement>('[data-decline]')!.onclick = () => {
+      box.innerHTML = '<span class="chip">Liberato</span> <button class="link" data-undo-free>Annulla</button>';
+      box.querySelector<HTMLButtonElement>('[data-undo-free]')!.onclick = restore;
     };
+  };
+  app.querySelectorAll<HTMLElement>('[data-offer]').forEach((o) => {
+    const box = o.querySelector<HTMLElement>('.offer-actions')!;
+    bindOffer(Number(o.dataset.offer), box, box.innerHTML);
   });
   window.scrollTo({ top: 0 });
 }

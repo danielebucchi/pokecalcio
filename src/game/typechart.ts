@@ -23,7 +23,11 @@ const CHART: Chart = {
   fairy: { fire: 0.5, fighting: 2, poison: 0.5, dragon: 2, dark: 2, steel: 0.5 },
 };
 
-function effectiveness(attack: PokeType, defend: PokeType[]): number {
+/** I 18 tipi. */
+export const ALL_TYPES = Object.keys(CHART) as PokeType[];
+
+/** Efficacia vera dei giochi (×2, ×0.5, ×0…), non attenuata. */
+export function effectiveness(attack: PokeType, defend: PokeType[]): number {
   return defend.reduce((m, d) => m * (CHART[attack]?.[d] ?? 1), 1);
 }
 

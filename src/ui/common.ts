@@ -38,7 +38,7 @@ export function teamTable(t: TeamSetup): string {
       const extra = role === 'POR' ? ` · portata ${reachOf(sp.heightDm).toFixed(1)} m` : '';
       return `<tr>
         <td><img class="mini" src="${spriteUrl(sp.dex)}" alt=""></td>
-        <td><b>${sp.name}</b> <small>Lv${inst.level}</small><div class="types">${sp.types.map((t) => TYPE_NAMES[t]).join(' / ')}</div></td>
+        <td><b>${sp.name}</b> <small>Lv${inst.level}</small><div class="types">${sp.types.map((t) => `<span class="type-tag" data-type="${t}">${TYPE_NAMES[t]}</span>`).join(' / ')}</div></td>
         <td><span class="role role-${role}">${role}</span></td>
         <td>${g.att}</td><td>${g.dif}</td><td>${g.vel}</td><td>${g.pv}</td>
         <td><b>${Math.round(rating)}</b><small>${extra}</small></td>

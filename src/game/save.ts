@@ -76,6 +76,8 @@ export interface SaveData {
   title?: string;
   /** PC di Bill: chi esce dalla rosa finisce qui, senza limiti (si ritira solo da Campione, in città). */
   box: OwnedPokemon[];
+  /** Medaglie che avevi all'ultima copia del salvataggio (o all'ultimo "più tardi"): per il promemoria. */
+  backupBadges?: number;
 }
 
 const KEY = 'pokecalcio-save';
@@ -293,10 +295,10 @@ export function bestRole(p: PokemonInstance): { role: 'DIF' | 'CEN' | 'ATT'; rat
 export const bestRating = (p: PokemonInstance) => bestRole(p).rating;
 
 /** Panchina automatica: le riserve con il voto migliore. */
-export function autoBench(save: SaveData): string[] {
+export function autoBench(save: SaveData, weight: (p: OwnedPokemon) => number = () => 1): string[] {
   return save.roster
     .filter((p) => !save.lineup.includes(p.uid))
-    .sort((a, b) => bestRating(b) - bestRating(a))
+    .sort((a, b) => bestRating(b) * weight(b) - bestRating(a) * weight(a))
     .slice(0, BENCH_MAX)
     .map((p) => p.uid);
 }
@@ -339,6 +341,15 @@ export function withdrawPokemon(save: SaveData, uid: string, swapUid?: string): 
   const p = save.box.find((x) => x.uid === uid);
   if (!p || boxLock(save)) return false;
   if (save.roster.length >= ROSTER_MAX && !(swapUid && depositPokemon(save, swapUid))) return false;
+  save.box = save.box.filter((x) => x.uid !== uid);
+  save.roster.push(p);
+  return true;
+}
+
+/** Annulla un deposito appena fatto (anche durante l'avventura): torna in tribuna se c'è posto. */
+export function undoDeposit(save: SaveData, uid: string): boolean {
+  const p = save.box.find((x) => x.uid === uid);
+  if (!p || save.roster.length >= ROSTER_MAX) return false;
   save.box = save.box.filter((x) => x.uid !== uid);
   save.roster.push(p);
   return true;
@@ -415,9 +426,14 @@ export function eventState(save: SaveData, ev: PlaceEvent): { done: true } | { d
 }
 
 /** Formazione migliore per il modulo: prova tutte le combinazioni (la rosa è piccola). */
-export function autoLineup(save: SaveData): (string | null)[] {
+/** `weight`: moltiplicatore per Pokémon (es. il vantaggio di tipo contro una squadra precisa). */
+export function autoLineup(save: SaveData, weight: (p: OwnedPokemon) => number = () => 1): (string | null)[] {
   const slots = FORMATIONS[save.formation].slots;
-  const ratings = new Map(save.roster.map((p) => [p.uid, ratingsOf(p)]));
+  const ratings = new Map(save.roster.map((p) => {
+    const r = ratingsOf(p);
+    const w = weight(p);
+    return [p.uid, { POR: r.POR * w, DIF: r.DIF * w, CEN: r.CEN * w, ATT: r.ATT * w }];
+  }));
   let best: string[] = [];
   let bestScore = -Infinity;
   const pick = (i: number, used: string[], score: number) => {
