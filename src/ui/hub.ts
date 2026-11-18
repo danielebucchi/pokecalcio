@@ -13,12 +13,12 @@ import {
   applyDrill, currentStats, drillBlock, drillPreview, drillStat, expToNext, suggestedDrill, type Drill,
 } from '../game/progression';
 import {
-  SESSIONS_PER_PLACE, SPARRING_PER_MATCH, autoLineup, findOwned, lineupProblem, ratingsOf,
+  BENCH_MAX, ROSTER_MAX, SESSIONS_PER_PLACE, SPARRING_PER_MATCH, autoBench, autoLineup, benchOf, bestRating, bestRole, releasePokemon, findOwned, lineupProblem, ratingsOf,
   type OwnedPokemon, type SaveData,
 } from '../game/save';
 import type { PokemonInstance, Role } from '../game/stats';
 import { MAX_SUBS, type TeamSetup } from '../match/engine';
-import { clubTeam } from '../match/teams';
+import { clubTeam, evolvedForm, gymLevel } from '../match/teams';
 import { esc, evoLine, teamTable } from './common';
 import { spriteUrl } from './sprites';
 import { bindThemeToggle, themeToggleHtml } from './theme';
@@ -49,6 +49,8 @@ export interface HubState {
   message: string | null;
   /** Posizione della formazione selezionata sul campo. */
   slot: number;
+  /** Pokémon che stai per lasciare andare (aspetta il secondo tocco). */
+  releasing?: string | null;
 }
 
 export interface HubActions {
@@ -102,7 +104,7 @@ export function renderHub(app: HTMLElement, save: SaveData, ch: Challenges, stat
   const tabs: [HubTab, string, string][] = [
     ['squad', 'Formazione', ''],
     ['training', 'Allenamento', save.sessionsLeft + save.sparringLeft ? `<span class="badge">${save.sessionsLeft + save.sparringLeft}</span>` : ''],
-    ['map', 'Mappa di Kanto', ''],
+    ['map', '<span class="lbl-long">Mappa di Kanto</span><span class="lbl-short">Mappa</span>', ''],
   ];
   const showWelcome = save.matchday === 1 && !localStorage.getItem(WELCOME_KEY);
 
@@ -110,10 +112,10 @@ export function renderHub(app: HTMLElement, save: SaveData, ch: Challenges, stat
     <div class="topbar">
       <span class="brand">Poké<span>.</span>Calcio</span>
       <span class="sparkle">✦</span>
-      <span>Calcio a 5 con le statistiche di Bulbapedia</span>
+      <span class="tb-extra">Calcio a 5 con le statistiche di Bulbapedia</span>
       <span class="sparkle">✦</span>
-      <span>Medaglie ${save.badges}/${GYMS.length}</span>
-      ${save.titles ? `<span class="sparkle">✦</span><span>Campione della Lega ×${save.titles}</span>` : ''}
+      <span class="tb-keep">Medaglie ${save.badges}/${GYMS.length}</span>
+      ${save.titles ? `<span class="sparkle tb-extra">✦</span><span class="tb-extra">Campione della Lega ×${save.titles}</span>` : ''}
       ${themeToggleHtml()}
     </div>
     <header class="hub-head" style="--team:${save.color}">
@@ -173,7 +175,7 @@ function headerGoal(save: SaveData, ch: Challenges, problem: string | null): str
   const here = `Sei a ${esc(ch.location.name)}`;
   if (ch.gym) {
     return `<div class="next" style="--team:${ch.gym.color}">
-        <small>${here} · palestra di livello ${ch.gym.level}</small>
+        <small>${here} · palestra di livello ${gymLevel(ch.gym)}</small>
         <span class="next-name">${esc(ch.gym.leader)} <span class="chip type-chip" style="--team:${ch.gym.color}">${TYPE_NAMES[ch.gym.type]}</span></span>
       </div>
       <button id="play" class="primary big" ${problem ? 'disabled' : ''} title="${esc(problem ?? `Sfida ${ch.gym.leader} per la ${ch.gym.badge}`)}">Sfida ${esc(ch.gym.leader)}</button>`;
@@ -216,6 +218,8 @@ function renderSquad(main: HTMLElement, save: SaveData, state: HubState, actions
   state.slot = Math.min(state.slot, formation.slots.length - 1);
   const selected = formation.slots[state.slot];
   const slotOf = new Map(save.lineup.map((uid, i) => [uid, i]));
+  const bench = benchOf(save);
+  const onBench = new Set(bench.map((p) => p.uid));
 
   const pitch = formation.slots
     .map((slot, i) => {
@@ -241,7 +245,7 @@ function renderSquad(main: HTMLElement, save: SaveData, state: HubState, actions
         ? '<span class="chip chip-lilac">in questa posizione</span>'
         : at !== undefined
           ? `<span class="chip chip-pink">in campo · ${formation.slots[at].role}</span>`
-          : '<span class="chip">riserva</span>';
+          : onBench.has(p.uid) ? '<span class="chip chip-sky">in panchina</span>' : '<span class="chip">in tribuna</span>';
       return `<button class="pick ${here ? 'current' : ''}" data-uid="${p.uid}">
         <img src="${sprite(p)}" alt="">
         <span class="pick-body">
@@ -270,6 +274,7 @@ function renderSquad(main: HTMLElement, save: SaveData, state: HubState, actions
           <button id="auto" title="Sceglie da solo la combinazione con i voti più alti">Formazione automatica</button>
         </div>
         <p class="muted">${formation.description}</p>
+        ${benchHtml(save, bench, state)}
       </div>
       <div class="card pick-panel">
         <div class="pick-head">
@@ -295,7 +300,9 @@ function renderSquad(main: HTMLElement, save: SaveData, state: HubState, actions
       const i = state.slot;
       const j = save.lineup.indexOf(uid);
       if (j === i) return;
-      if (j >= 0) save.lineup[j] = save.lineup[i]; // era già in campo: si scambiano di posto
+      const out = save.lineup[i];
+      if (j >= 0) save.lineup[j] = out; // era già in campo: si scambiano di posto
+      else if (out && save.bench.includes(uid)) save.bench[save.bench.indexOf(uid)] = out; // dalla panchina: chi esce prende il suo posto
       save.lineup[i] = uid;
       actions.changed();
     };
@@ -304,12 +311,64 @@ function renderSquad(main: HTMLElement, save: SaveData, state: HubState, actions
     save.formation = (e.target as HTMLSelectElement).value as FormationKey;
     // stessi Pokémon, ruoli nuovi: si riparte dalla formazione migliore per il modulo
     save.lineup = autoLineup(save);
+    save.bench = autoBench(save);
     actions.changed();
   };
   document.getElementById('auto')!.onclick = () => {
     save.lineup = autoLineup(save);
+    save.bench = autoBench(save);
     actions.changed();
   };
+  // panchina: chi è in tribuna entra (se c'è posto), chi è in panchina esce
+  main.querySelectorAll<HTMLButtonElement>('[data-bench]').forEach((b) => {
+    b.onclick = () => {
+      const uid = b.dataset.bench!;
+      const now = benchOf(save).map((p) => p.uid);
+      if (now.includes(uid)) save.bench = now.filter((u) => u !== uid);
+      else if (now.length < BENCH_MAX) save.bench = [...now, uid];
+      actions.changed();
+    };
+  });
+  // lasciare andare: secondo tocco per confermare
+  main.querySelectorAll<HTMLButtonElement>('[data-release]').forEach((b) => {
+    b.onclick = () => {
+      const uid = b.dataset.release!;
+      if (state.releasing !== uid) {
+        state.releasing = uid;
+        renderSquad(main, save, state, actions);
+        return;
+      }
+      state.releasing = null;
+      releasePokemon(save, uid);
+      actions.changed();
+    };
+  });
+}
+
+/** Panchina (le uniche riserve che entrano in partita) e il resto della rosa, in tribuna. */
+function benchHtml(save: SaveData, bench: OwnedPokemon[], state: HubState): string {
+  const stands = save.roster.filter((p) => !save.lineup.includes(p.uid) && !bench.includes(p));
+  const full = bench.length >= BENCH_MAX;
+  const row = (p: OwnedPokemon, inBench: boolean) => {
+    const { role: best } = bestRole(p);
+    const confirm = state.releasing === p.uid;
+    return `<div class="reserve ${inBench ? 'on-bench' : ''}">
+      <img src="${sprite(p)}" alt="">
+      <span class="reserve-body"><b>${nameOf(p)}</b> <small>Lv${p.level}</small>
+        <small class="muted"><span class="role role-${best}">${best}</span> voto ${Math.round(bestRating(p))}</small></span>
+      <span class="reserve-actions">
+        <button data-bench="${p.uid}" ${!inBench && full ? 'disabled title="Panchina piena: togline uno"' : ''}>${inBench ? 'Togli' : 'In panchina'}</button>
+        <button class="${confirm ? 'danger' : 'link'}" data-release="${p.uid}" title="Lascia andare: libera un posto nella rosa">${confirm ? 'Sicuro?' : 'Libera'}</button>
+      </span>
+    </div>`;
+  };
+  return `<section class="card bench-card">
+    <h3>Panchina <small>${bench.length}/${BENCH_MAX} · in partita possono entrare solo loro</small></h3>
+    ${bench.length ? bench.map((p) => row(p, true)).join('') : '<p class="muted">Nessuno in panchina: senza riserve non potrai fare cambi.</p>'}
+    <h3>Tribuna <small>rosa ${save.roster.length}/${ROSTER_MAX}</small></h3>
+    ${stands.length ? stands.map((p) => row(p, false)).join('') : '<p class="muted">Tutta la rosa è in campo o in panchina.</p>'}
+    ${save.roster.length > ROSTER_MAX ? `<p class="toast warn">La rosa supera il limite di ${ROSTER_MAX}: per accettare nuovi Pokémon dovrai prima lasciarne andare qualcuno.</p>` : ''}
+  </section>`;
 }
 
 // ───────────────────────────── allenamento ─────────────────────────────
@@ -490,6 +549,37 @@ function leagueCard(save: SaveData, league: NonNullable<Challenges['league']>, m
 
 const KIND_LABEL = { city: 'Città', route: 'Percorso', dungeon: 'Luogo' } as const;
 
+/** Sul telefono la mappa disegnata è nascosta: si apre a richiesta e la scelta resta finché non ricarichi. */
+let showMapOnPhone = false;
+
+/**
+ * Scheda di un luogo dove puoi andare (o chiuso), per il telefono: cosa c'è, se è nuovo e perché è
+ * chiuso. Toccandola ci vai.
+ */
+function placeCard(save: SaveData, l: KantoLocation, fly = false): string {
+  const champ = !!l.requiresChampion && !save.titles;
+  const locked = l.badges > save.badges || champ;
+  const why = l.badges > save.badges ? (l.badges === 1 ? 'serve 1 medaglia' : `servono ${l.badges} medaglie`) : 'si apre dopo la Lega';
+  const facts: string[] = [];
+  if (l.gym !== undefined) {
+    const g = GYMS[l.gym];
+    const state = l.gym < save.badges ? '✓' : l.gym === save.badges ? 'da sfidare' : 'chiusa';
+    facts.push(`<span class="chip" style="--team:${g.color}">Palestra ${esc(g.leader)} · ${state}</span>`);
+  }
+  if (l.league) facts.push('<span class="chip chip-star">Lega Pokémon</span>');
+  if (l.legendary && !save.legendaries.includes(l.legendary.key)) facts.push(`<span class="chip chip-star">★ ${esc(POKEDEX[l.legendary.key].name)}</span>`);
+  const todo = l.trainers.filter((t) => !save.defeated.includes(t.id)).length;
+  if (l.trainers.length) facts.push(`<span class="chip">${todo ? `${todo} ${todo === 1 ? 'allenatore' : 'allenatori'}` : 'allenatori battuti ✓'}</span>`);
+  if (!locked && !save.trainedAt.includes(l.id)) facts.push(`<span class="chip chip-mint">+${SESSIONS_PER_PLACE} sessioni</span>`);
+  const wild = l.wild.slice(0, 5).map((k) => `<img src="${spriteUrl(POKEDEX[k].dex)}" alt="" title="${esc(POKEDEX[k].name)}">`).join('');
+  return `<button class="place ${locked ? 'locked' : ''}" ${locked ? 'disabled' : `data-go="${l.id}"`}>
+    <span class="place-head"><b>${esc(l.name)}</b>${!locked && !save.visited.includes(l.id) ? ' <span class="new-badge">Nuovo</span>' : ''} <small>${fly ? 'volo · ' : ''}${KIND_LABEL[l.kind]} · Lv ~${l.level}</small></span>
+    ${locked ? `<small class="muted">Chiuso: ${why}</small>` : facts.length ? `<span class="place-facts">${facts.join('')}</span>` : ''}
+    ${wild && !locked ? `<span class="place-wild">${wild}</span>` : ''}
+    ${locked ? '' : '<span class="place-go">›</span>'}
+  </button>`;
+}
+
 /** Mappa illustrata di Kanto: luoghi, collegamenti, dove sei e dove puoi andare. */
 function mapSvg(save: SaveData, ch: Challenges, actions: HubActions): string {
   const links = KANTO_LINKS.map(([a, b]) => {
@@ -503,10 +593,11 @@ function mapSvg(save: SaveData, ch: Challenges, actions: HubActions): string {
     const here = l.id === ch.location.id;
     const go = actions.canTravel(l.id);
     const gymDone = l.gym !== undefined && l.gym < save.badges;
+    const fresh = !locked && !save.visited.includes(l.id);
     const r = l.kind === 'city' ? 15 : 9;
     const color = l.gym !== undefined ? GYMS[l.gym].color : l.league ? '#e8a317' : l.kind === 'dungeon' ? 'var(--lilac-deep)' : 'var(--mint-deep)';
     const title = locked
-      ? l.requiresChampion && l.badges <= save.badges ? `${l.name}: si apre dopo aver vinto la Lega` : `${l.name}: servono ${l.badges} medaglie`
+      ? l.requiresChampion && l.badges <= save.badges ? `${l.name}: si apre dopo aver vinto la Lega` : `${l.name}: ${l.badges === 1 ? 'serve 1 medaglia' : `servono ${l.badges} medaglie`}`
       : here ? `${l.name}: sei qui` : go ? `Vai a ${l.name}` : `${l.name}: non è collegato a dove sei`;
     const shape = l.kind === 'dungeon'
       ? `<rect x="${l.x - r}" y="${l.y - r}" width="${r * 2}" height="${r * 2}" rx="5" transform="rotate(45 ${l.x} ${l.y})" style="fill:${color}" />`
@@ -518,6 +609,7 @@ function mapSvg(save: SaveData, ch: Challenges, actions: HubActions): string {
       ${gymDone ? `<text x="${l.x}" y="${l.y + 5}" class="km-star">✦</text>` : ''}
       ${locked ? `<text x="${l.x}" y="${l.y + 4}" class="km-lock">${l.requiresChampion && l.badges <= save.badges ? '★' : l.badges}</text>` : ''}
       <text x="${l.x}" y="${l.y + r + 15}" class="km-label">${esc(l.name)}</text>
+      ${fresh ? `<g class="km-new"><rect x="${l.x - 21}" y="${l.y - r - 19}" width="42" height="14" rx="7" /><text x="${l.x}" y="${l.y - r - 9}">NUOVO</text></g>` : ''}
     </g>`;
   }).join('');
   return `<svg viewBox="0 0 1000 700" class="kanto-map" role="img" aria-label="Mappa di Kanto">
@@ -566,9 +658,9 @@ function renderMap(main: HTMLElement, save: SaveData, ch: Challenges, actions: H
         <div class="challenge-head">
           <span class="badge-medal big"></span>
           <div>
-            <small class="muted">Palestra di ${esc(ch.gym.city)} · livello ${ch.gym.level}</small>
+            <small class="muted">Palestra di ${esc(ch.gym.city)} · livello ${gymLevel(ch.gym)}</small>
             <h2>${esc(ch.gym.leader)} <span class="chip type-chip" style="--team:${ch.gym.color}">${TYPE_NAMES[ch.gym.type]}</span></h2>
-            <p class="muted">Vinci per la <b>${esc(ch.gym.badge)}</b>. Schiera sempre <b>${esc(POKEDEX[ch.gym.signature].name)}</b>; gli altri cambiano a ogni sfida.</p>
+            <p class="muted">Vinci per la <b>${esc(ch.gym.badge)}</b>. In campo sempre l'asso <b>${esc(POKEDEX[evolvedForm(ch.gym.signature, gymLevel(ch.gym))].name)}</b> e la contromossa <b>${esc(POKEDEX[evolvedForm(ch.gym.counter, gymLevel(ch.gym))].name)}</b>; gli altri li sceglie <b>studiando la tua squadra</b>: se porti tanti Pokémon di un tipo, lui porta chi li batte. La squadra è già evoluta quanto il livello permette.</p>
           </div>
           <button class="primary big" data-play="gym" ${problem ? 'disabled' : ''}>Sfida ${esc(ch.gym.leader)}</button>
         </div>
@@ -605,9 +697,14 @@ function renderMap(main: HTMLElement, save: SaveData, ch: Challenges, actions: H
       legendarySection = `<div class="toast">${esc(sp.name)} si è già unito alla tua squadra ✦</div>`;
     }
   }
-  const trainers = ch.trainers.length
-    ? `<section class="card"><h3>Allenatori</h3>${ch.trainers.map((t) => trainerCard(loc, t, problem)).join('')}</section>`
-    : '';
+  // allenatori tutti battuti: la sezione si chiude in una riga, così resta in vista dove andare
+  const allBeaten = ch.trainers.length > 0 && ch.trainers.every((t) => t.defeated);
+  const trainerList = ch.trainers.map((t) => trainerCard(loc, t, problem)).join('');
+  const trainers = !ch.trainers.length
+    ? ''
+    : allBeaten
+      ? `<details class="card trainers-done"><summary><h3>Allenatori <small>tutti battuti ✓</small></h3></summary>${trainerList}</details>`
+      : `<section class="card"><h3>Allenatori</h3>${trainerList}</section>`;
   const wild = loc.wild.length
     ? `<section class="card"><h3>Pokémon selvatici</h3>
         <div class="wild">${loc.wild.map((k) => `<span class="wild-mon"><img src="${spriteUrl(POKEDEX[k].dex)}" alt=""><small>${esc(POKEDEX[k].name)}</small></span>`).join('')}</div>
@@ -631,18 +728,25 @@ function renderMap(main: HTMLElement, save: SaveData, ch: Challenges, actions: H
     const l = locationById(id);
     const champ = !!l.requiresChampion && !save.titles;
     const locked = l.badges > save.badges || champ;
-    const why = l.badges > save.badges ? `${l.badges} medaglie` : 'dopo la Lega';
-    return `<button data-go="${id}" ${locked ? 'disabled' : ''} title="${locked ? `Si apre: ${why}` : `Vai a ${esc(l.name)}`}">${esc(l.name)}${locked ? ` <small>${why}</small>` : ''}</button>`;
+    const why = l.badges > save.badges ? `${l.badges} ${l.badges === 1 ? 'medaglia' : 'medaglie'}` : 'dopo la Lega';
+    const fresh = !locked && !save.visited.includes(id);
+    return `<button data-go="${id}" ${locked ? 'disabled' : ''} title="${locked ? `Si apre: ${why}` : `Vai a ${esc(l.name)}`}">${esc(l.name)}${locked ? ` <small>${why}</small>` : ''}${fresh ? ' <span class="new-badge">Nuovo</span>' : ''}</button>`;
   }).join('');
-  const fly = save.badges >= FLY_BADGES
-    ? KANTO.filter((l) => l.kind === 'city' && l.id !== loc.id && save.visited.includes(l.id))
-        .map((l) => `<button data-go="${l.id}">${esc(l.name)}</button>`).join('')
-    : '';
+  const flyTargets = save.badges >= FLY_BADGES
+    ? KANTO.filter((l) => l.kind === 'city' && l.id !== loc.id && save.visited.includes(l.id) && !neighbors(loc.id).includes(l.id))
+    : [];
+  const fly = flyTargets.map((l) => `<button data-go="${l.id}">${esc(l.name)}</button>`).join('');
+  // per il telefono: i luoghi vicini (e il volo) come schede grandi, al posto della mappa disegnata
+  const travel = `<section class="card travel">
+    <div class="travel-head"><h3>Dove andare</h3><button class="link" id="toggle-map">${showMapOnPhone ? 'Nascondi la mappa' : 'Mostra la mappa'}</button></div>
+    <div class="places">${neighbors(loc.id).map((id) => placeCard(save, locationById(id))).join('')}</div>
+    ${flyTargets.length ? `<h3>Volo <small>città già visitate</small></h3><div class="places">${flyTargets.map((l) => placeCard(save, l, true)).join('')}</div>` : ''}
+  </section>`;
 
   main.innerHTML = `
     ${problem ? `<div class="toast warn">${esc(problem)} Vai su Formazione.</div>` : ''}
     ${message ? `<div class="toast">${esc(message)} Le trovi in Allenamento.</div>` : ''}
-    <div class="kanto">
+    <div class="kanto ${showMapOnPhone ? 'show-map' : ''}">
       <div class="card map-card">
         ${mapSvg(save, ch, actions)}
         <p class="muted map-legend">Tocca un luogo evidenziato per spostarti. Cerchi grandi: città · cerchi piccoli: percorsi · rombi: grotte e luoghi speciali · il numero indica le medaglie che servono${save.badges >= FLY_BADGES ? ' · con la Medaglia Tuono puoi volare nelle città già visitate' : ''}.</p>
@@ -658,8 +762,9 @@ function renderMap(main: HTMLElement, save: SaveData, ch: Challenges, actions: H
         ${ch.league ? leagueCard(save, ch.league, mine, problem) : ''}
         ${legendarySection}
         ${trainers}
-        ${wild}
+        ${travel}
         ${wildMatch}
+        ${wild}
       </div>
     </div>
     <section class="card badge-case">
@@ -673,9 +778,9 @@ function renderMap(main: HTMLElement, save: SaveData, ch: Challenges, actions: H
         <li><b>Sconfitta</b>: nessuno guadagna esperienza e hai un solo sparring; col pareggio metà esperienza e 2 sparring.</li>
         <li><b>Allenamento</b>: le sessioni per le statistiche (EV) arrivano 3 per ogni luogo nuovo, quelle che non usi restano; gli sparring (esperienza) si ricaricano dopo ogni partita. Così grindando sali di livello, ma gli EV crescono solo viaggiando.</li>
         <li><b>Tetto di livello</b>: si cresce fino a 2 livelli sopra la prossima palestra (68 prima della Lega), poi serve la medaglia. Da Campione il tetto sparisce.</li>
-        <li><b>Leggendari</b>: Zapdos alla Centrale Elettrica, Articuno alle Isole Spumarine, Moltres sulla Via Vittoria e Mewtwo nella Grotta Ignota (aperta dopo aver vinto la Lega). Guidano una squadra di selvatici: se vinci, si uniscono a te.</li>
-        <li><b>Nuovi Pokémon</b>: niente lotte né Poké Ball. Se vinci la partitella con i selvatici, di solito uno chiede di unirsi alla squadra e tu decidi se accettare. Chi evolve si convince più facilmente, i Pokémon già forti e rari molto meno, e conta anche come ha giocato contro di te. La rosa non ha limiti.</li>
-        <li><b>Palestre</b>: si battono in ordine, ognuna nella sua città; ognuna ha un tipo e un livello fisso. Vincere dà la medaglia.</li>
+        <li><b>Leggendari</b>: Zapdos alla Centrale Elettrica, Articuno alle Isole Spumarine, Moltres sulla Via Vittoria e Mewtwo nella Grotta Ignota (aperta dopo aver vinto la Lega). Guidano una squadra di selvatici: se vinci, chiedono di unirsi a te.</li>
+        <li><b>Nuovi Pokémon</b>: niente lotte né Poké Ball. Se vinci la partitella con i selvatici, di solito uno chiede di unirsi alla squadra e tu decidi se accettare. Chi evolve si convince più facilmente, i Pokémon già forti e rari molto meno, e conta anche come ha giocato contro di te. La rosa ha al massimo ${ROSTER_MAX} Pokémon: se è piena, per accettare ne lasci andare uno.</li>
+        <li><b>Palestre</b>: si battono in ordine, ognuna nella sua città; ognuna ha un tipo e un livello fisso. In campo ci sono sempre il suo asso e la sua contromossa (l'unico Pokémon di un altro tipo); gli altri li sceglie studiando la tua squadra (titolari e panchina), portando chi mette in difficoltà i tuoi tipi. Vincere dà la medaglia.</li>
         <li><b>Esperienza</b>: come nei giochi, un avversario di livello più alto rende di più; uno più debole di te rende poco.</li>
         <li><b>Statistiche</b>: Attacco e Difesa sono il valore più alto tra fisico e speciale; Velocità è quanto corre; i PV sono la resistenza. Partono dalle statistiche di Bulbapedia e crescono con livello e allenamento.</li>
         <li><b>Tipi</b>: contano molto. Il vantaggio dei giochi qui vale ×1.25 (lo svantaggio ×0.8) e pesa su contrasti, danni e parate: contro una palestra schiera chi ha il tipo giusto.</li>
@@ -684,10 +789,21 @@ function renderMap(main: HTMLElement, save: SaveData, ch: Challenges, actions: H
         <li><b>Calci piazzati</b>: rimesse laterali con i piedi come nel calcio a 5; sugli angoli e sui cross vince il duello aereo chi ha Difesa, PV e altezza.</li>
         <li><b>Portiere</b>: para con Difesa, PV e Velocità; più è alto, più porta copre (Onix!).</li>
         <li><b>Evoluzione</b>: la barra lilla si riempie con gol, assist, parate e contrasti vinti. Se il livello lo permette puoi evolvere, senza limiti. A fine gara tutti tornano allo stadio base.</li>
-        <li><b>Cambi</b>: al massimo ${MAX_SUBS} sostituzioni a partita con le riserve; chi esce non rientra. Utili per rimpiazzare un Pokémon KO o senza PV.</li>
+        <li><b>Panchina e cambi</b>: in partita vanno 5 titolari e ${BENCH_MAX} riserve in panchina, scelte in Formazione. Al massimo ${MAX_SUBS} sostituzioni; chi esce non rientra. Utili per rimpiazzare un Pokémon KO o senza PV.</li>
       </ul>
     </details>`;
 
+  // sul telefono la mappa è più larga dello schermo e scorre: si parte centrati su dove sei
+  const centerMap = () => {
+    const mapCard = main.querySelector<HTMLElement>('.map-card');
+    const here = main.querySelector('.km-here');
+    if (mapCard && here && mapCard.scrollWidth > mapCard.clientWidth) {
+      const r = here.getBoundingClientRect();
+      const c = mapCard.getBoundingClientRect();
+      mapCard.scrollLeft += r.left + r.width / 2 - (c.left + c.width / 2);
+    }
+  };
+  centerMap();
   main.querySelectorAll<HTMLButtonElement>('[data-play]').forEach((b) => {
     b.onclick = () => {
       if (!lineupProblem(save)) actions.play(b.dataset.play as ChallengeKind);
@@ -707,4 +823,13 @@ function renderMap(main: HTMLElement, save: SaveData, ch: Challenges, actions: H
     el.addEventListener('click', () => actions.travel(el.dataset.go!));
   });
   main.querySelector<HTMLButtonElement>('[data-join]')?.addEventListener('click', actions.joinLeague);
+  main.querySelector<HTMLButtonElement>('#toggle-map')?.addEventListener('click', (e) => {
+    showMapOnPhone = !showMapOnPhone;
+    main.querySelector('.kanto')!.classList.toggle('show-map', showMapOnPhone);
+    (e.currentTarget as HTMLButtonElement).textContent = showMapOnPhone ? 'Nascondi la mappa' : 'Mostra la mappa';
+    if (showMapOnPhone) {
+      centerMap();
+      main.querySelector('.map-card')!.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  });
 }

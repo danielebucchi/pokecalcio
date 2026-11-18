@@ -6,8 +6,8 @@ import {
   ROUND_NAMES, YOU, advanceLeague, currentRound, newLeagueRun, opponentOf, trainerById, type LeagueResult,
 } from './game/league';
 import { awardMatch } from './game/progression';
-import { recruitOffers } from './game/recruit';
-import { arriveAt, chooseStarters, loadSave, newSave, storeSave, type SaveData } from './game/save';
+import { recruitOffers, type RecruitOffer } from './game/recruit';
+import { ROSTER_MAX, addToRoster, arriveAt, chooseStarters, lineupProblem, loadSave, newSave, releasable, storeSave, type SaveData } from './game/save';
 import type { Match, TeamSetup } from './match/engine';
 import {
   buildGymTeam, buildLeagueTeam, buildLegendaryTeam, buildTrainerTeam, buildWildTeam, clubTeam, simulateMatch,
@@ -46,15 +46,17 @@ function challenges(): Challenges {
     const run = save.league;
     const oppId = run ? opponentOf(run, YOU) : null;
     const trainer = oppId ? trainerById(oppId)! : null;
-    const team = run && trainer ? cached(`league:${run.edition}:${currentRound(run)}`, () => buildLeagueTeam(trainer)) : null;
+    const team = run && trainer ? cached(`league:${run.edition}:${currentRound(run)}:${scoutKey()}`, () => buildLeagueTeam(trainer, scout())) : null;
     league = { run, opponent: trainer, team };
   }
   return {
     location: loc,
     gym,
-    gymTeam: gym ? cached(`gym:${save.badges}`, () => buildGymTeam(gym)) : null,
+    // il capopalestra studia la tua squadra: se la cambi, cambia anche lui chi porta
+    gymTeam: gym ? cached(`gym:${save.badges}:${scoutKey()}`, () => buildGymTeam(gym, scout())) : null,
     trainers,
-    wild: cached(`wild:${loc.id}`, () => buildWildTeam(loc)),
+    // i selvatici stanno al massimo un livello sotto i tuoi titolari (nei luoghi già superati)
+    wild: cached(`wild:${loc.id}`, () => buildWildTeam(loc, lineupLevel())),
     legendary: loc.legendary && !save.legendaries.includes(loc.legendary.key)
       ? cached(`legendary:${loc.id}`, () => buildLegendaryTeam(loc))
       : null,
@@ -93,6 +95,11 @@ function showHub() {
       hub.message = gained ? `${locationById(id).name}: ${gained} nuove sessioni di allenamento.` : null;
       storeSave(save);
       showHub();
+      // sul telefono i luoghi sono in fondo alla pagina: si torna su, al luogo appena raggiunto
+      if (window.matchMedia('(max-width: 700px)').matches) {
+        document.querySelector('.loc-head')?.scrollIntoView({ block: 'start' });
+        window.scrollBy(0, -12);
+      }
     },
     canTravel,
     joinLeague() {
@@ -111,6 +118,18 @@ function showHub() {
       showHub();
     },
   });
+}
+
+/** La tua squadra vista dagli avversari che la studiano (palestre e Lega), se è schierabile. */
+function scout(): TeamSetup | undefined {
+  return lineupProblem(save) ? undefined : clubTeam(save);
+}
+const scoutKey = () => [...save.lineup, '|', ...save.bench].map((uid) => save.roster.find((p) => p.uid === uid)?.speciesKey ?? '').join(',');
+
+/** Livello medio dei titolari. */
+function lineupLevel(): number {
+  const lv = save.lineup.map((uid) => save.roster.find((p) => p.uid === uid)?.level ?? 0);
+  return lv.length ? lv.reduce((a, b) => a + b, 0) / lv.length : 0;
 }
 
 function playMatch(kind: ChallengeKind, trainerId?: string, skip = false) {
@@ -132,16 +151,26 @@ function playMatch(kind: ChallengeKind, trainerId?: string, skip = false) {
         : kind === 'trainer' ? trainerOutcome(route!.trainer, match)
         : kind === 'legendary' ? legendaryOutcome(match)
         : undefined;
-      // dopo una partitella vinta, qualche selvatico chiede di unirsi (si accetta nel resoconto)
-      const offers = kind === 'wild' ? recruitOffers(match, 0) : [];
+      // dopo una partitella vinta qualche selvatico chiede di unirsi, battuto il leggendario è lui
+      // a chiederlo: si accetta (o si fa posto nella rosa) nel resoconto
+      const offers = kind === 'wild' ? recruitOffers(match, 0) : kind === 'legendary' ? legendaryOffer(match) : [];
       const report = awardMatch(save, match, 0);
       storeSave(save);
       return { report, banner, offers };
     },
-    recruit(inst) {
-      if (save.roster.some((p) => p.uid === inst.uid)) return;
-      save.roster.push({ ...inst, exp: 0 });
+    recruit(inst, releaseUid) {
+      if (!addToRoster(save, inst, releaseUid)) return false;
+      const legendary = locationById(save.location).legendary;
+      if (kind === 'legendary' && legendary?.key === inst.speciesKey) save.legendaries.push(inst.speciesKey);
       storeSave(save);
+      return true;
+    },
+    roster() {
+      return {
+        count: save.roster.length,
+        max: ROSTER_MAX,
+        releasable: releasable(save).map((p) => ({ uid: p.uid, speciesKey: p.speciesKey, level: p.level })),
+      };
     },
     onLeave(counted = true) {
       hub.message = null;
@@ -160,23 +189,25 @@ function trainerOutcome(t: RouteTrainer, match: Match): MatchBanner {
   return { title: `Hai battuto ${t.name}!`, text: `Allenatori battuti finora: ${save.defeated.length}.`, color: '#8ec5d8' };
 }
 
-/** Battuto il leggendario, si unisce a te: niente tasso di cattura. */
+/** Battuto il leggendario, vuole unirsi a te: niente tasso di cattura, basta accettare. */
 function legendaryOutcome(match: Match): MatchBanner {
-  const loc = locationById(save.location);
-  const key = loc.legendary!.key;
-  const name = POKEDEX[key].name;
+  const name = POKEDEX[locationById(save.location).legendary!.key].name;
   if (match.winner !== 0) {
     return { title: `${name} è troppo forte, per ora`, text: 'Allenati e torna a sfidarlo: resterà qui ad aspettarti.', color: '#e8a317' };
   }
-  const inst = match.appearances.find((p) => p.team === 1 && p.inst.speciesKey === key)!.inst;
-  save.roster.push({ ...inst, exp: 0 });
-  save.legendaries.push(key);
   return {
-    title: `${name} si unisce alla tua squadra!`,
-    text: `Ti ha messo alla prova e l'hai superata. Lo trovi nella rosa al livello ${inst.level}.`,
+    title: `${name} vuole unirsi alla tua squadra!`,
+    text: 'Ti ha messo alla prova e l\'hai superata: accetta qui sotto. Se lo lasci andare resta qui e potrai sfidarlo di nuovo.',
     color: '#e8a317',
     badge: true,
   };
+}
+
+function legendaryOffer(match: Match): RecruitOffer[] {
+  const key = locationById(save.location).legendary!.key;
+  if (match.winner !== 0) return [];
+  const inst = match.appearances.find((p) => p.team === 1 && p.inst.speciesKey === key)!.inst;
+  return [{ inst, reason: 'ti ha messo alla prova e l\'hai superata' }];
 }
 
 function gymOutcome(gym: Gym, match: Match): MatchBanner {

@@ -51,10 +51,22 @@ export interface MatchCallbacks {
   knockout?: boolean;
   /** A fine partita: aggiorna la carriera e restituisce l'esperienza guadagnata. */
   onFinish(match: Match): { report: ExpReport[]; banner?: MatchBanner; offers?: RecruitOffer[] };
-  /** Un selvatico che ha chiesto di unirsi è stato accettato. */
-  recruit?(inst: PokemonInstance): void;
+  /**
+   * Un Pokémon che ha chiesto di unirsi è stato accettato; con la rosa piena `releaseUid` è chi
+   * lascia il posto. Restituisce false se non c'è spazio.
+   */
+  recruit?(inst: PokemonInstance, releaseUid?: string): boolean;
+  /** Stato della rosa, per chiedere chi lasciare andare quando è piena. */
+  roster?(): RosterState;
   /** Torna all'hub: `counted` è false se la partita è stata abbandonata. */
   onLeave(counted?: boolean): void;
+}
+
+export interface RosterState {
+  count: number;
+  max: number;
+  /** Chi si può lasciare andare (non chi è in formazione). */
+  releasable: { uid: string; speciesKey: string; level: number }[];
 }
 
 /** Gioca la partita dentro `app`. Restituisce una funzione che ferma il ciclo. */
@@ -62,15 +74,17 @@ export function runMatch(app: HTMLElement, teams: [TeamSetup, TeamSetup], cb: Ma
   const match = new Match(teams, { knockout: cb.knockout });
   const [t0, t1] = match.teams;
   const humanTeam = t0.controlled ? 0 : 1;
+  // sul telefono in verticale il campo si disegna in verticale: i Pokémon vengono molto più grandi
+  const portrait = window.matchMedia('(max-width: 700px) and (orientation: portrait)').matches;
 
   app.innerHTML = `
     <div class="topbar">
       <span class="brand">Poké<span>.</span>Calcio</span>
       <span class="sparkle">✦</span>
-      <span>${esc(t0.name)} contro ${esc(t1.name)}</span>
+      <span class="tb-extra">${esc(t0.name)} contro ${esc(t1.name)}</span>
       ${themeToggleHtml()}
     </div>
-    <div class="match">
+    <div class="match ${portrait ? 'portrait' : ''}">
       <div class="scoreboard">
         <div class="sb-team" style="--team:${t0.color}">${esc(t0.name)}</div>
         <div class="sb-score"><span id="s0">0</span> - <span id="s1">0</span></div>
@@ -82,7 +96,7 @@ export function runMatch(app: HTMLElement, teams: [TeamSetup, TeamSetup], cb: Ma
         <span class="speed">${[1, 2, 4].map((s) => `<button data-speed="${s}" class="${s === 1 ? 'on' : ''}">${s}×</button>`).join('')}</span>
         <span id="subsLeft" class="chip chip-sky" title="Sostituzioni rimaste: chi esce non rientra"></span>
         <label class="toggle" title="Fa evolvere i tuoi Pokémon appena possibile, scegliendo il ramo più forte">
-          <input type="checkbox" id="autoevo"> <span>Evoluzione automatica</span>
+          <input type="checkbox" id="autoevo"> <span class="lbl-long">Evoluzione automatica</span><span class="lbl-short">Auto-evo</span>
         </label>
         <span class="hint"><kbd>Spazio</kbd> pausa · <kbd>1</kbd>–<kbd>5</kbd> evolvi</span>
         <button id="quit" title="La partita non verrà conteggiata">Abbandona</button>
@@ -96,7 +110,7 @@ export function runMatch(app: HTMLElement, teams: [TeamSetup, TeamSetup], cb: Ma
 
   bindThemeToggle(app);
   const canvas = document.getElementById('pitch') as HTMLCanvasElement;
-  const renderer = new Renderer(canvas, match);
+  const renderer = new Renderer(canvas, match, portrait);
   canvas.style.aspectRatio = `${renderer.width} / ${renderer.height}`;
 
   const logEl = document.getElementById('log')!;
@@ -316,7 +330,7 @@ export function runMatch(app: HTMLElement, teams: [TeamSetup, TeamSetup], cb: Ma
     if (match.finished) {
       cleanup();
       const { report, banner, offers } = cb.onFinish(match);
-      showPostMatch(app, match, humanTeam, report, banner, cb.onLeave, offers ?? [], cb.recruit);
+      showPostMatch(app, match, humanTeam, report, banner, cb.onLeave, offers ?? [], cb.recruit, cb.roster);
       return;
     }
     raf = requestAnimationFrame(frame);
@@ -338,12 +352,12 @@ export function skipMatch(app: HTMLElement, teams: [TeamSetup, TeamSetup], cb: M
   const match = new Match([{ ...teams[0], controlled: false }, { ...teams[1], controlled: false }], { knockout: cb.knockout });
   while (!match.finished) match.step(1 / 60);
   const { report, banner, offers } = cb.onFinish(match);
-  showPostMatch(app, match, humanTeam, report, banner, cb.onLeave, offers ?? [], cb.recruit);
+  showPostMatch(app, match, humanTeam, report, banner, cb.onLeave, offers ?? [], cb.recruit, cb.roster);
 }
 
 function showPostMatch(
   app: HTMLElement, match: Match, humanTeam: 0 | 1, report: ExpReport[], banner: MatchBanner | undefined, onLeave: () => void,
-  offers: RecruitOffer[] = [], recruit?: (inst: PokemonInstance) => void,
+  offers: RecruitOffer[] = [], recruit?: MatchCallbacks['recruit'], roster?: MatchCallbacks['roster'],
 ) {
   const offerCards = offers.map((o, i) => {
     const sp = POKEDEX[o.inst.speciesKey];
@@ -365,7 +379,7 @@ function showPostMatch(
     </div>`;
   }).join('');
   const offersHtml = offers.length
-    ? `<section class="card offers"><h3>Vogliono unirsi a te <span class="sparkle">✦</span></h3>${offerCards}</section>`
+    ? `<section class="card offers"><h3>Vogliono unirsi a te <span class="sparkle">✦</span>${roster ? ` <small>rosa ${roster().count}/${roster().max}</small>` : ''}</h3>${offerCards}</section>`
     : match.winner === humanTeam && match.teams[humanTeam === 0 ? 1 : 0].name.startsWith('Selvatici')
       ? '<section class="card offers"><p class="muted">Bella vittoria, ma questa volta nessuno ha chiesto di unirsi. Riprova!</p></section>'
       : '';
@@ -468,11 +482,42 @@ function showPostMatch(
     <div class="actions"><button class="primary" data-continue>Continua</button></div>`;
   bindThemeToggle(app);
   app.querySelectorAll<HTMLButtonElement>('[data-continue]').forEach((b) => (b.onclick = () => onLeave()));
+  const joined = (i: number, released?: string) => {
+    app.querySelector(`[data-offer="${i}"] .offer-actions`)!.innerHTML =
+      `<span class="chip chip-mint">Si è unito alla squadra ✦</span>${released ? ` <small class="muted">${esc(released)} lasciato andare</small>` : ''}`;
+  };
   app.querySelectorAll<HTMLButtonElement>('[data-accept]').forEach((b) => {
     b.onclick = () => {
       const i = Number(b.dataset.accept);
-      recruit?.(offers[i].inst);
-      app.querySelector(`[data-offer="${i}"] .offer-actions`)!.innerHTML = '<span class="chip chip-mint">Si è unito alla squadra ✦</span>';
+      const st = roster?.();
+      if (!st || st.count < st.max) {
+        if (recruit?.(offers[i].inst) !== false) joined(i);
+        return;
+      }
+      // rosa piena: si sceglie chi lasciare andare per fargli posto
+      const box = app.querySelector<HTMLElement>(`[data-offer="${i}"] .offer-actions`)!;
+      const keep = box.innerHTML;
+      box.classList.add('swap');
+      box.innerHTML = `<p class="swap-title">Rosa piena (${st.count}/${st.max}): chi lasci andare per fargli posto?</p>
+        <div class="swap-list">${st.releasable
+          .map((r) => `<button data-release="${r.uid}"><img src="${spriteUrl(POKEDEX[r.speciesKey].dex)}" alt=""> ${esc(POKEDEX[r.speciesKey].name)} <small>Lv${r.level}</small></button>`)
+          .join('')}</div>
+        <button class="link" data-cancel>Annulla</button>`;
+      box.querySelectorAll<HTMLButtonElement>('[data-release]').forEach((r) => {
+        r.onclick = () => {
+          const out = st.releasable.find((x) => x.uid === r.dataset.release)!;
+          box.classList.remove('swap');
+          if (recruit?.(offers[i].inst, out.uid) !== false) joined(i, POKEDEX[out.speciesKey].name);
+        };
+      });
+      box.querySelector<HTMLButtonElement>('[data-cancel]')!.onclick = () => {
+        box.classList.remove('swap');
+        box.innerHTML = keep;
+        box.querySelector<HTMLButtonElement>('[data-accept]')!.onclick = b.onclick;
+        box.querySelector<HTMLButtonElement>('[data-decline]')!.onclick = () => {
+          box.innerHTML = '<span class="chip">Lasciato andare</span>';
+        };
+      };
     };
   });
   app.querySelectorAll<HTMLButtonElement>('[data-decline]').forEach((b) => {

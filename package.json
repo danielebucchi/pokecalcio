@@ -10,7 +10,8 @@
     "sim": "tsx scripts/sim.ts",
     "career": "tsx scripts/career.ts",
     "import-pokedex": "tsx scripts/import-pokedex.ts",
-    "maxed": "tsx scripts/maxed.ts"
+    "maxed": "tsx scripts/maxed.ts",
+    "counter": "tsx scripts/counter.ts"
   },
   "devDependencies": {
     "tsx": "^4.23.15",
