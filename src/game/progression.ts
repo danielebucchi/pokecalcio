@@ -15,8 +15,8 @@ const EXP_REF_LEVEL = 55;
 /** Esperienza per passare al livello successivo: cresce piano, ~1 livello a partita a metà carriera. */
 export const expToNext = (level: number) => 50 + level * 10;
 
-/** Livelli sopra la prossima palestra fin dove si può crescere. */
-const CAP_MARGIN = 2;
+/** Livelli sopra la prossima palestra fin dove si può crescere (oggetto per poterlo provare nelle simulazioni). */
+export const CAP = { margin: 2 };
 /** Tetto per la Lega: i suoi allenatori sono tra il 64 e il 70. */
 const LEAGUE_CAP = 68;
 
@@ -26,7 +26,7 @@ const LEAGUE_CAP = 68;
  * il tetto sparisce.
  */
 export function levelCap(save: SaveData): number {
-  if (save.badges < GYMS.length) return GYMS[save.badges].level + CAP_MARGIN;
+  if (save.badges < GYMS.length) return GYMS[save.badges].level + CAP.margin;
   return save.titles ? MAX_LEVEL : LEAGUE_CAP;
 }
 

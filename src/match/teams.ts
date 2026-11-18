@@ -1,10 +1,11 @@
 import { FORMATIONS, type FormationKey } from '../game/formations';
-import { POKEDEX, type BaseStats } from '../data/pokedex';
-import { GYMS, type Gym } from '../game/gyms';
+import { POKEDEX, bst, type BaseStats, type PokeType } from '../data/pokedex';
+import type { Gym } from '../game/gyms';
 import { locationById, neighbors, trainerLevel, type KantoLocation, type RouteTrainer } from '../game/kanto';
 import type { LeagueTrainer } from '../game/league';
-import { findOwned, ratingsOf, type SaveData } from '../game/save';
+import { benchOf, findOwned, ratingsOf, type SaveData } from '../game/save';
 import { createInstance, type PokemonInstance, type Role } from '../game/stats';
+import { typeMultiplier } from '../game/typechart';
 import { Match, type TeamSetup } from './engine';
 
 function teamFrom(
@@ -37,8 +38,7 @@ export function buildDemoTeams(): [TeamSetup, TeamSetup] {
 /** La squadra del giocatore, dalla formazione salvata (va validata prima con lineupProblem). */
 export function clubTeam(save: SaveData): TeamSetup {
   const insts = save.lineup.map((uid) => findOwned(save, uid)!);
-  const bench = save.roster.filter((p) => !save.lineup.includes(p.uid));
-  return teamFrom(save.clubName, save.color, true, save.formation, insts, bench);
+  return teamFrom(save.clubName, save.color, true, save.formation, insts, benchOf(save));
 }
 
 /** Distribuisce a caso un budget di EV, come farebbe un allenatore avversario. */
@@ -54,15 +54,39 @@ function spreadEvs(inst: PokemonInstance, budget: number) {
  * Mette ognuno nel ruolo che gli riesce meglio (prima il portiere): i primi 5 vanno in campo,
  * gli altri in panchina. Modifica `pool`.
  */
-function bestLineup(pool: PokemonInstance[], formation: FormationKey, keeper?: PokemonInstance) {
+function bestLineup(pool: PokemonInstance[], formation: FormationKey, keeper?: PokemonInstance, weight: (p: PokemonInstance) => number = () => 1) {
   if (keeper) pool.splice(pool.indexOf(keeper), 1);
+  const score = (p: PokemonInstance, role: Role) => ratingsOf(p)[role] * weight(p);
   const lineup = FORMATIONS[formation].slots.map((slot) =>
-    slot.role === 'POR' && keeper ? keeper : pool.sort((a, b) => ratingsOf(b)[slot.role] - ratingsOf(a)[slot.role]).shift()!,
+    slot.role === 'POR' && keeper ? keeper : pool.sort((a, b) => score(b, slot.role) - score(a, slot.role)).shift()!,
   );
   return { lineup, bench: pool };
 }
 
+/**
+ * Vantaggio di tipo di una specie contro i Pokémon avversari: > 0 se li mette in difficoltà
+ * (colpisce forte e incassa poco), < 0 se li subisce. Media dei logaritmi dei moltiplicatori.
+ */
+function typeEdge(types: PokeType[], rivals: PokeType[][]): number {
+  if (!rivals.length) return 0;
+  return rivals.reduce((a, r) => a + Math.log(typeMultiplier(types, r)) - Math.log(typeMultiplier(r, types)), 0) / rivals.length;
+}
+
+/** Tipi della squadra da studiare: titolari e panchina. */
+const scoutTypes = (team?: TeamSetup): PokeType[][] =>
+  team ? [...team.roster.map((r) => r.inst), ...(team.bench ?? [])].map((i) => POKEDEX[i.speciesKey].types) : [];
+
 const shuffle = <T>(xs: T[]) => xs.map((x) => [Math.random(), x] as const).sort((a, b) => a[0] - b[0]).map(([, x]) => x);
+
+/** Forma più evoluta raggiungibile a quel livello (ramo con la somma delle statistiche più alta). */
+export function evolvedForm(key: string, level: number): string {
+  let k = key;
+  for (;;) {
+    const next = POKEDEX[k].evolutions.filter((e) => e.level <= level).sort((a, b) => bst(POKEDEX[b.key]) - bst(POKEDEX[a.key]))[0];
+    if (!next) return k;
+    k = next.key;
+  }
+}
 
 /** Livelli in meno per i leggendari degli allenatori (Zekrom/Reshiram di N, Zacian di Hop). */
 export const LEGENDARY_LEVEL_GAP = 12;
@@ -75,34 +99,59 @@ interface EliteDef {
   signature: string;
   /** Portiere fisso, sempre in porta. */
   keeper?: string;
+  /** Contromossa delle palestre: sempre in squadra e sempre in campo, come l'asso. */
+  counter?: string;
   /** Leggendari: uno, sorteggiato, è sempre in squadra. */
   legendary?: string[];
   pool: string[];
   /** Quanto è allenata la squadra, 0-1: scala talento (IV) e allenamento (EV). La Lega è al massimo. */
   training?: number;
+  /** Squadra già evoluta quanto il livello permette, come nei giochi (le palestre sì). */
+  evolved?: boolean;
 }
-
-/** Allenamento delle palestre: le prime sono alla portata di una squadra appena formata, le ultime al massimo. */
-export const GYM_TRAINING = { first: 0.1, last: 0.7 };
-export const gymTraining = (index: number) =>
-  GYM_TRAINING.first + ((GYM_TRAINING.last - GYM_TRAINING.first) * index) / 7;
 
 /**
  * Squadra di un capopalestra o di un allenatore della Lega, nuova a ogni sfida: il Pokémon simbolo
  * più 6 pescati dal suo gruppo. Livello fisso, talento perfetto (IV 31) e allenamento completo mirato al ruolo.
  */
-function buildEliteTeam(def: EliteDef): TeamSetup {
+function buildEliteTeam(def: EliteDef, scout?: TeamSetup): TeamSetup {
   const legendary = def.legendary?.length ? def.legendary[Math.floor(Math.random() * def.legendary.length)] : undefined;
-  const fixed = [...new Set([def.signature, def.keeper, legendary].filter((k): k is string => !!k))];
+  const fixed = [...new Set([def.signature, def.counter, def.keeper, legendary].filter((k): k is string => !!k))];
   // il gruppo può contenere più esemplari della stessa specie (la squadra di Eevee di Penny):
   // si toglie solo una copia di simbolo e portiere
   const rest = [...def.pool];
   for (const k of fixed) if (rest.includes(k)) rest.splice(rest.indexOf(k), 1);
-  const picks = [...fixed, ...shuffle(rest).slice(0, 7 - fixed.length)];
+  // il capopalestra studia la tua squadra: dal suo gruppo porta soprattutto chi ti mette in difficoltà
+  // (con un po' di caso, così la squadra cambia comunque da una sfida all'altra)
+  const rivals = scoutTypes(scout);
+  const edge = (k: string) => typeEdge(POKEDEX[k].types, rivals);
+  const drawn = rivals.length
+    ? rest.map((k) => [edge(k) + Math.random() * 0.25, k] as const).sort((a, b) => b[0] - a[0]).map(([, k]) => k)
+    : shuffle(rest);
+  const picks = [...fixed, ...drawn.slice(0, 7 - fixed.length)];
   // il leggendario non evolve e parte già al massimo: gioca qualche livello sotto il resto della squadra
-  const insts = picks.map((k) => createInstance(k, k === legendary ? Math.max(5, def.level - LEGENDARY_LEVEL_GAP) : def.level));
+  const insts = picks.map((k) => {
+    if (k === legendary) return createInstance(k, Math.max(5, def.level - LEGENDARY_LEVEL_GAP));
+    // come nei giochi la squadra è già evoluta quanto il livello permette (a scelta, il ramo più forte)
+    return createInstance(def.evolved ? evolvedForm(k, def.level) : k, def.level);
+  });
   const keeper = def.keeper ? insts[picks.indexOf(def.keeper)] : undefined;
-  const { lineup, bench } = bestLineup(insts, def.formation, keeper);
+  // asso e contromossa: si prendono adesso, perché bestLineup riordina e svuota `insts`
+  const forced = [def.signature, def.counter].filter((k): k is string => !!k).map((k) => insts[picks.indexOf(k)]);
+  // in campo per voto (tipo e statistiche insieme: un tipo giusto un po' conta), con la stella sempre titolare
+  const weight = (p: PokemonInstance) => Math.min(1.15, Math.max(0.9, 1 + 0.2 * edge(p.speciesKey)));
+  const { lineup, bench } = bestLineup(insts, def.formation, keeper, rivals.length ? weight : undefined);
+  // l'asso e la contromossa giocano sempre: se sono in panchina prendono il posto del più debole
+  // in campo tra gli altri (portiere escluso); gli altri titolari restano quelli scelti studiando te
+  for (const p of forced) {
+    if (lineup.includes(p)) continue;
+    const weakest = lineup
+      .slice(1)
+      .filter((q) => !forced.includes(q))
+      .sort((a, b) => Math.max(...Object.values(ratingsOf(a))) - Math.max(...Object.values(ratingsOf(b))))[0];
+    lineup[lineup.indexOf(weakest)] = p;
+    bench.splice(bench.indexOf(p), 1, weakest);
+  }
   const slots = FORMATIONS[def.formation].slots;
   const t = def.training ?? 1;
   const iv = Math.round(15 + 16 * t);
@@ -124,10 +173,14 @@ function buildEliteTeam(def: EliteDef): TeamSetup {
   return teamFrom(def.name, def.color, false, def.formation, lineup, bench);
 }
 
-export const buildGymTeam = (gym: Gym) =>
-  buildEliteTeam({ ...gym, name: `${gym.leader} · ${gym.city}`, training: gymTraining(GYMS.indexOf(gym)) });
+/** `scout`: la tua squadra, che il capopalestra studia per scegliere chi schierare. */
+export const buildGymTeam = (gym: Gym, scout?: TeamSetup) =>
+  buildEliteTeam({ ...gym, name: `${gym.leader} · ${gym.city}`, level: gymLevel(gym), evolved: true }, scout);
 
-export const buildLeagueTeam = (t: LeagueTrainer) => buildEliteTeam({ ...t, name: t.name });
+/** Livello della squadra del capopalestra (qualcuno sta un po' sopra il livello nominale della palestra). */
+export const gymLevel = (gym: Gym) => gym.level + (gym.extraLevels ?? 0);
+
+export const buildLeagueTeam = (t: LeagueTrainer, scout?: TeamSetup) => buildEliteTeam({ ...t, name: t.name }, scout);
 
 /** Partita giocata senza grafica (le altre del tabellone della Lega): restituisce il vincitore. */
 export function simulateMatch(a: TeamSetup, b: TeamSetup, knockout: boolean): Match {
@@ -202,7 +255,7 @@ export function buildWildTeam(loc: KantoLocation, playerLevel = 0): TeamSetup {
   const keys = Array.from({ length: 7 }, () => wild[Math.floor(Math.random() * wild.length)]);
   const formation: FormationKey = Math.random() < 0.5 ? 'rombo' : 'quadrato';
   // nei luoghi già superati i selvatici non restano troppo indietro: altrimenti finisce 14-1
-  const base = Math.max(loc.level - 2, playerLevel - TUNING.wildGap);
+  const base = Math.round(Math.max(loc.level - 2, playerLevel - TUNING.wildGap));
   const level = () => Math.max(5, Math.min(100, base + Math.floor(Math.random() * 2)));
   const insts = keys.map((k) => {
     const inst = createInstance(k, level());

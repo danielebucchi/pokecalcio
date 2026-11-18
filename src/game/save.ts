@@ -18,6 +18,8 @@ export interface SaveData {
   formation: FormationKey;
   /** uid del Pokémon per ogni posizione del modulo (stesso ordine di FORMATIONS[formation].slots). */
   lineup: (string | null)[];
+  /** uid delle riserve portate in panchina (al massimo BENCH_MAX): in partita entrano solo loro. */
+  bench: string[];
   /** Sessioni di allenamento EV (ATT/DIF/VEL/PV): 3 per ogni luogo nuovo, quelle non usate restano. */
   sessionsLeft: number;
   /** Sparring (esperienza): si ricaricano dopo ogni partita, di più se vinci. */
@@ -83,6 +85,7 @@ export function newSave(): SaveData {
     roster,
     formation: 'rombo',
     lineup: [],
+    bench: [],
     sessionsLeft: SESSIONS_PER_PLACE,
     sparringLeft: SPARRING_PER_MATCH.w,
     matchday: 1,
@@ -103,6 +106,7 @@ export function chooseStarters(save: SaveData, keys: string[]) {
   if (keys.length !== STARTER_COUNT || keys.some((k) => !STARTER_POOL.includes(k))) throw new Error('Scegli 5 Pokémon del gruppo');
   save.roster = keys.map((key) => ({ ...createInstance(key, STARTER_LEVEL), exp: 0 }));
   save.lineup = autoLineup(save);
+  save.bench = autoBench(save);
 }
 
 export function loadSave(): SaveData {
@@ -119,6 +123,8 @@ export function loadSave(): SaveData {
         // prima l'allenamento si ricaricava a ogni partita: i luoghi già visitati contano come usati
         data.trainedAt ??= [...(data.visited ?? [])];
         data.sparringLeft ??= SPARRING_PER_MATCH.w;
+        // prima in panchina andava tutta la rosa: si portano i 4 migliori
+        data.bench ??= autoBench(data);
         // carriere di prima della mappa: si riparte dalla città dell'ultima medaglia
         if (!data.location) {
           const lastGymCity = KANTO.find((l) => l.gym === data.badges - 1);
@@ -158,6 +164,61 @@ export function lineupProblem(save: SaveData): string | null {
 export function ratingsOf(p: PokemonInstance) {
   const sp = POKEDEX[p.speciesKey];
   return roleRatings(gameStats(realStats(sp, p)), sp.heightDm);
+}
+
+/** Rosa massima (come le squadre dei giochi, ma per il calcio a 5): oltre bisogna lasciare andare qualcuno. */
+export const ROSTER_MAX = 14;
+/** Riserve che si portano in panchina: le uniche che possono entrare in partita. */
+export const BENCH_MAX = 4;
+
+/** Ruolo di movimento che gli riesce meglio (i voti da portiere sono su un'altra scala) e il suo voto. */
+export function bestRole(p: PokemonInstance): { role: 'DIF' | 'CEN' | 'ATT'; rating: number } {
+  const r = ratingsOf(p);
+  const role = (['DIF', 'CEN', 'ATT'] as const).reduce((a, b) => (r[b] > r[a] ? b : a));
+  return { role, rating: r[role] };
+}
+export const bestRating = (p: PokemonInstance) => bestRole(p).rating;
+
+/** Panchina automatica: le riserve con il voto migliore. */
+export function autoBench(save: SaveData): string[] {
+  return save.roster
+    .filter((p) => !save.lineup.includes(p.uid))
+    .sort((a, b) => bestRating(b) - bestRating(a))
+    .slice(0, BENCH_MAX)
+    .map((p) => p.uid);
+}
+
+/** Riserve in panchina, ripulite da chi non c'è più o è passato in campo. */
+export function benchOf(save: SaveData): OwnedPokemon[] {
+  return save.bench
+    .filter((uid) => !save.lineup.includes(uid))
+    .map((uid) => findOwned(save, uid))
+    .filter((p): p is OwnedPokemon => !!p)
+    .slice(0, BENCH_MAX);
+}
+
+/** Chi si può lasciare andare: non chi è in formazione. */
+export const releasable = (save: SaveData) => save.roster.filter((p) => !save.lineup.includes(p.uid));
+
+/** Lascia andare un Pokémon della rosa (non uno schierato). */
+export function releasePokemon(save: SaveData, uid: string): boolean {
+  if (save.lineup.includes(uid) || !findOwned(save, uid)) return false;
+  save.roster = save.roster.filter((p) => p.uid !== uid);
+  save.bench = save.bench.filter((b) => b !== uid);
+  return true;
+}
+
+/**
+ * Aggiunge un Pokémon alla rosa; se è piena serve lasciarne andare uno (`releaseUid`).
+ * Se in panchina c'è posto, ci va subito. Restituisce false se non c'è spazio.
+ */
+export function addToRoster(save: SaveData, inst: PokemonInstance, releaseUid?: string): boolean {
+  if (releaseUid) releasePokemon(save, releaseUid);
+  if (save.roster.length >= ROSTER_MAX || save.roster.some((p) => p.uid === inst.uid)) return false;
+  save.roster.push({ ...inst, exp: 0 });
+  save.bench = benchOf(save).map((p) => p.uid);
+  if (save.bench.length < BENCH_MAX) save.bench.push(inst.uid);
+  return true;
 }
 
 /** Formazione migliore per il modulo: prova tutte le combinazioni (la rosa è piccola). */

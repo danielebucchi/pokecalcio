@@ -28,13 +28,23 @@ type Palette = (typeof PALETTES)['light'];
 const FONT_DISPLAY = "'Fredoka', system-ui, sans-serif";
 const FONT_BODY = "'Manrope', system-ui, sans-serif";
 
+/** Dimensioni del campo disegnato in orizzontale (il verso del motore). */
+const LAND_W = FIELD_W * S + 2 * M;
+const LAND_H = FIELD_H * S + 2 * M;
+
 export class Renderer {
   private ctx: CanvasRenderingContext2D;
   private t: Palette = PALETTES.light;
-  readonly width = FIELD_W * S + 2 * M;
-  readonly height = FIELD_H * S + 2 * M;
+  readonly width: number;
+  readonly height: number;
 
-  constructor(canvas: HTMLCanvasElement, private match: Match) {
+  /**
+   * `portrait`: campo in verticale per i telefoni (la tua squadra difende in basso e attacca verso
+   * l'alto). Si ruota solo il terreno di gioco: Pokémon, palla e scritte restano dritti.
+   */
+  constructor(canvas: HTMLCanvasElement, private match: Match, private portrait = false) {
+    this.width = portrait ? LAND_H : LAND_W;
+    this.height = portrait ? LAND_W : LAND_H;
     const dpr = window.devicePixelRatio || 1;
     canvas.width = this.width * dpr;
     canvas.height = this.height * dpr;
@@ -44,6 +54,14 @@ export class Renderer {
 
   private px = (x: number) => M + x * S;
   private py = (y: number) => M + y * S;
+  /** Posizione sullo schermo di un punto del campo, nel verso scelto. */
+  private get zoom() {
+    return this.portrait ? 1.5 : 1;
+  }
+
+  private pos(x: number, y: number): [number, number] {
+    return this.portrait ? [M + y * S, M + (FIELD_W - x) * S] : [this.px(x), this.py(y)];
+  }
 
   draw() {
     const c = this.ctx;
@@ -99,6 +117,18 @@ export class Renderer {
     bg.addColorStop(1, this.t.bgB);
     c.fillStyle = bg;
     c.fillRect(0, 0, this.width, this.height);
+    // in verticale si disegna lo stesso terreno ruotato di 90°: (x, y) orizzontali → (y, larghezza - x)
+    c.save();
+    if (this.portrait) {
+      c.translate(0, this.height);
+      c.rotate(-Math.PI / 2);
+    }
+    this.drawField();
+    c.restore();
+  }
+
+  private drawField() {
+    const c = this.ctx;
     c.save();
     c.beginPath();
     c.roundRect(this.px(0), this.py(0), FIELD_W * S, FIELD_H * S, 18);
@@ -157,8 +187,13 @@ export class Renderer {
   private drawPlayer(p: Player) {
     const c = this.ctx;
     const m = this.match;
-    const x = this.px(p.x);
-    const y = this.py(p.y);
+    const [sx, sy] = this.pos(p.x, p.y);
+    // in verticale il campo è più stretto sullo schermo: Pokémon, basi e barre un po' più grandi
+    c.save();
+    c.translate(sx, sy);
+    c.scale(this.zoom, this.zoom);
+    const x = 0;
+    const y = 0;
     const color = m.teams[p.team].color;
     const ko = !isActive(p);
     c.save();
@@ -266,21 +301,27 @@ export class Renderer {
       c.font = `600 13px ${FONT_DISPLAY}`;
       c.fillText(`KO ${mins}'`, x, by - 5);
     }
+    c.restore();
   }
 
   private drawBall() {
     const c = this.ctx;
     const b = this.match.ball;
-    const x = this.px(b.x);
-    const y = this.py(b.y);
+    const [x, y] = this.pos(b.x, b.y);
     if (b.shot) {
+      // scia: dove era la palla un attimo fa (1,5 px per m/s)
+      const [tx, ty] = this.pos(b.x - (b.vx * 1.5) / S, b.y - (b.vy * 1.5) / S);
       c.strokeStyle = 'rgba(248, 168, 200, 0.7)';
       c.lineWidth = 4;
       c.beginPath();
       c.moveTo(x, y);
-      c.lineTo(x - b.vx * 1.5, y - b.vy * 1.5);
+      c.lineTo(tx, ty);
       c.stroke();
     }
+    c.save();
+    c.translate(x, y);
+    c.scale(this.zoom, this.zoom);
+    c.translate(-x, -y);
     c.fillStyle = `rgba(${this.t.shadowRgb}, 0.25)`;
     c.beginPath();
     c.ellipse(x + 2, y + 4, 6, 3, 0, 0, Math.PI * 2);
@@ -296,5 +337,6 @@ export class Renderer {
     c.beginPath();
     c.arc(x, y, 2.2, 0, Math.PI * 2);
     c.fill();
+    c.restore();
   }
 }

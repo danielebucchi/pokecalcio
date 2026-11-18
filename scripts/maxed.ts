@@ -8,12 +8,13 @@ import { KANTO, TRAINER_LEVEL } from '../src/game/kanto';
 import { levelCap } from '../src/game/progression';
 import { DEFAULT_STARTERS, SESSIONS_PER_PLACE, autoLineup, chooseStarters, newSave } from '../src/game/save';
 import { EV_PER_SESSION } from '../src/game/progression';
-import { GYM_TRAINING, TUNING, buildGymTeam, buildTrainerTeam, buildWildTeam, clubTeam, simulateMatch } from '../src/match/teams';
+import { TUNING, buildGymTeam, buildTrainerTeam, buildWildTeam, clubTeam, simulateMatch } from '../src/match/teams';
 import type { TeamSetup } from '../src/match/engine';
 
 if (process.env.TUNE) Object.assign(TUNING, JSON.parse(process.env.TUNE));
 if (process.env.TLV) TRAINER_LEVEL.bonus = Number(process.env.TLV);
-if (process.env.GYM) Object.assign(GYM_TRAINING, JSON.parse(process.env.GYM));
+// override dell'allenamento delle palestre: GYM='[0.3,0.6,…]'
+if (process.env.GYM) (JSON.parse(process.env.GYM) as number[]).forEach((t, i) => (GYMS[i].training = t));
 const N = Number(process.argv[2] ?? 60);
 
 const tot = { wild: [0, 0, 0], trainer: [0, 0, 0], gym: [0, 0, 0] } as Record<string, number[]>;

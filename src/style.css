@@ -100,6 +100,10 @@
 /* l'attributo hidden deve vincere sugli stili dei bottoni */
 [hidden] { display: none !important; }
 
+/* sotto al contenuto (e oltre lo sfondo fisso, che sui telefoni non copre tutta la pagina) */
+html { background: var(--bg); }
+.lbl-short { display: none; }
+
 body {
   margin: 0;
   overflow-x: hidden; /* la barra in alto è larga 100vw */
@@ -308,6 +312,29 @@ button.link:hover:not(:disabled) { background: none; color: var(--pink-deep); tr
 .pick-rating .bar { width: 100%; }
 .pick-rating .bar i { background: var(--grad-primary); }
 tr.reserve { opacity: 0.65; }
+
+/* panchina e tribuna */
+.bench-card { margin-top: 14px; }
+.bench-card h3 { margin: 4px 0 8px; }
+.bench-card h3 + * { margin-top: 0; }
+.bench-card * + h3 { margin-top: 16px; }
+.reserve { display: grid; grid-template-columns: 44px 1fr auto; gap: 10px; align-items: center; padding: 6px 0; }
+.reserve + .reserve { border-top: 1px solid var(--line-faint); }
+.reserve img { width: 44px; height: 44px; image-rendering: pixelated; background: var(--lilac-soft); border-radius: 12px; }
+.reserve.on-bench img { background: var(--sky-soft); }
+.reserve-body { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.reserve-body b { font-family: 'Fredoka', sans-serif; font-weight: 600; }
+.reserve-body .role { font-size: 0.6rem; padding: 0.1rem 0.45rem; }
+.reserve-actions { display: flex; gap: 4px; align-items: center; }
+.reserve-actions button { padding: 0.4rem 0.75rem; font-size: 0.78rem; }
+button.danger { background: var(--danger); color: #fff; border-color: transparent; }
+button.danger:hover:not(:disabled) { background: var(--danger); }
+/* rosa piena: scegli chi lasciare andare */
+.offer-actions.swap { grid-column: 1 / -1; display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
+.swap-title { margin: 0; font-weight: 700; }
+.swap-list { display: flex; flex-wrap: wrap; gap: 6px; }
+.offer .swap-list button { flex: 0 1 auto; padding: 0.3rem 0.7rem 0.3rem 0.3rem; font-size: 0.8rem; gap: 4px; }
+.offer .swap-list img { width: 30px; height: 30px; image-rendering: pixelated; background: none; border-radius: 0; }
 td.best { color: var(--pink-deep); font-weight: 800; }
 
 /* ───────── allenamento ───────── */
@@ -451,6 +478,40 @@ td.best { color: var(--pink-deep); font-weight: 800; }
 .wild-actions small { opacity: 0.7; }
 .next-goal { font-size: 1rem; }
 
+/* luoghi mai visitati */
+.new-badge { display: inline-flex; align-items: center; padding: 0.15rem 0.5rem; border-radius: 999px; background: var(--grad-primary); color: #fff;
+  font: 800 0.6rem/1.2 'Manrope', sans-serif; text-transform: uppercase; letter-spacing: 0.05em; vertical-align: 2px; box-shadow: var(--shadow-glow-pink); }
+.km-new rect { fill: var(--pink-deep); }
+.km-new text { font: 800 8.5px 'Manrope', sans-serif; letter-spacing: 0.06em; fill: #fff; text-anchor: middle; pointer-events: none; }
+.km-new { animation: km-new-bob 1.6s ease-in-out infinite; }
+@keyframes km-new-bob { 50% { transform: translateY(-2px); } }
+
+/* luoghi come schede (telefono): sul desktop c'è la mappa disegnata */
+.travel { display: none; border: 2px solid var(--pink-deep); box-shadow: var(--shadow-glow-pink); }
+.travel-head h3 { font-size: 1.25rem; }
+.trainers-done summary { cursor: pointer; list-style: none; display: flex; align-items: center; gap: 8px; }
+.trainers-done summary::-webkit-details-marker { display: none; }
+.trainers-done summary::before { content: '▸'; color: var(--ink-mute); transition: transform 200ms var(--ease); }
+.trainers-done[open] summary::before { transform: rotate(90deg); }
+.trainers-done summary h3 { margin: 0; }
+.trainers-done[open] summary { margin-bottom: 8px; }
+.travel-head { display: flex; justify-content: space-between; align-items: center; }
+.travel h3 { margin: 0 0 10px; }
+.travel h3 + .places, .places + h3 { margin-top: 0; }
+.places + h3 { margin-top: 16px; }
+.places { display: flex; flex-direction: column; gap: 8px; }
+.place { position: relative; display: flex; flex-direction: column; align-items: flex-start; gap: 6px; text-align: left; width: 100%;
+  padding: 12px 40px 12px 14px; border-radius: 18px; font-weight: 500; white-space: normal; }
+.place-head b { font: 600 1.05rem 'Fredoka', sans-serif; }
+.place-head small { margin-left: 4px; }
+.place-facts { display: flex; flex-wrap: wrap; gap: 4px; }
+.place-facts .chip { font-size: 0.62rem; }
+.place-facts .chip[style] { border-left: 4px solid var(--team); }
+.place-wild { display: flex; gap: 2px; }
+.place-wild img { width: 30px; height: 30px; image-rendering: pixelated; background: var(--mint-soft); border-radius: 8px; }
+.place-go { position: absolute; right: 14px; top: 50%; transform: translateY(-50%); font: 600 1.6rem 'Fredoka', sans-serif; color: var(--pink-deep); }
+.place.locked { opacity: 0.55; }
+
 /* Lega: tabellone */
 .bracket { display: grid; grid-template-columns: repeat(3, 1fr) 0.8fr; gap: 14px; margin-top: 16px; align-items: stretch; }
 .bk-col { display: grid; grid-template-rows: auto 1fr; gap: 8px; height: 100%; }
@@ -592,6 +653,156 @@ canvas { width: auto; height: auto; max-width: 100%; max-height: calc(100vh - 32
   .arena { grid-template-columns: 1fr; }
   .log { max-height: 240px; min-height: 0; }
   .bench { grid-template-columns: repeat(2, 1fr); }
+}
+
+/* ───────── telefono ───────── */
+@media (max-width: 700px) {
+  #app { padding: 0 10px calc(84px + env(safe-area-inset-bottom)); }
+  body { background-attachment: scroll; }
+  .lbl-long { display: none; }
+  .lbl-short { display: inline; }
+
+  /* barra in alto: solo marchio, medaglie e tema */
+  .topbar { gap: 8px; padding: 8px 12px; margin-bottom: 12px; }
+  .topbar .tb-extra, .topbar .sparkle { display: none; }
+  .topbar .tb-keep { font-weight: 700; }
+  .theme-toggle { padding: 0.3rem 0.7rem; font-size: 0.72rem; }
+
+  /* testata del club più compatta */
+  .hub-head { padding: 14px 16px; gap: 12px; border-radius: 20px; }
+  .hub-head h1 { font-size: 1.4rem; }
+  .hub-head .next { width: 100%; }
+  .hub-head button.big { width: 100%; padding: 0.8rem 1rem; }
+  .card { padding: 14px 16px; border-radius: 20px; }
+  .welcome { padding: 16px; }
+  .steps li { padding: 12px 12px 12px 48px; }
+
+  /* schede in fondo allo schermo, come un'app */
+  .tabs { position: fixed; left: 0; right: 0; bottom: 0; z-index: 20; margin: 0; gap: 6px; flex-wrap: nowrap;
+    padding: 8px 10px calc(8px + env(safe-area-inset-bottom)); background: var(--surface); backdrop-filter: blur(14px);
+    border-top: 1px solid var(--line); box-shadow: 0 -10px 30px -18px rgba(0, 0, 0, 0.35); }
+  .tabs button { flex: 1; padding: 0.7rem 0.4rem; font-size: 0.82rem; }
+  .hub-foot { margin-top: 18px; }
+
+  /* formazione */
+  .pm-slot { padding: 4px 4px; }
+  .pm-slot img { width: 48px; height: 48px; margin: -8px 0 -10px; }
+  .pm-slot small { font-size: 0.68rem; padding: 1px 6px; }
+  .pick-panel { padding: 14px; }
+  .pick-list { max-height: none; overflow: visible; }
+  .pick { grid-template-columns: 44px 1fr 56px; gap: 8px; padding: 6px 10px 6px 6px; }
+  .pick img { width: 44px; height: 44px; border-radius: 12px; }
+  .pick-stats { gap: 6px; flex-wrap: wrap; }
+  .pick-rating b { font-size: 1.25rem; }
+
+  /* allenamento */
+  .tgrid { grid-template-columns: 1fr; gap: 10px; }
+  .tcard:hover { transform: none; }
+  .training-pools { flex-basis: 100%; }
+  .drills button { padding: 0.55rem 0.7rem; }
+
+  /* mappa: nascosta, al suo posto i luoghi come schede; se la apri è più larga dello schermo e scorre */
+  .travel { display: block; }
+  .loc-head .destinations { display: none; }
+  .kanto:not(.show-map) .map-card { display: none; }
+  .map-card { overflow-x: auto; padding: 8px; -webkit-overflow-scrolling: touch; }
+  .kanto-map { min-width: 760px; }
+  .map-legend { position: sticky; left: 0; max-width: calc(100vw - 40px); }
+  .wild-match { flex-direction: column; align-items: stretch; }
+  .wild-actions { flex-direction: row; }
+  .wild-actions button { flex: 1; padding: 0.7rem 0.6rem; }
+  .wild-actions small { display: none; }
+  .trainer { flex-wrap: wrap; }
+  .challenge-head > button, .challenge-head > .primary { width: 100%; }
+  .legend-sprite { width: 72px; height: 72px; }
+  .badges { gap: 6px; }
+  .badge-medal { width: 36px; height: 36px; }
+  .badge-slot b { font-size: 0.8rem; }
+
+  /* scelta della prima squadra */
+  .starter-grid { grid-template-columns: 1fr; margin-bottom: 150px; }
+  .st-bar { bottom: 8px; width: calc(100% - 16px); padding: 10px 12px; gap: 10px; }
+  .st-slots { gap: 4px; }
+  .st-slot { width: 40px; height: 40px; border-radius: 12px; }
+  .st-slot img { width: 38px; height: 38px; }
+  .st-info .muted { font-size: 0.8rem; }
+  #st-go { width: 100%; }
+
+  /* partita: tabellone, comandi, campo e subito sotto i tuoi Pokémon */
+  .match { display: flex; flex-direction: column; }
+  .arena { display: contents; }
+  .pitch-wrap { order: 1; }
+  .bench { order: 2; }
+  .log { order: 3; margin-top: 10px; max-height: 180px; }
+  .scoreboard { grid-template-columns: 1fr auto 1fr; gap: 8px; padding: 8px 12px; border-radius: 18px; }
+  .sb-team { font-size: 0.85rem; line-height: 1.2; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+    border-left: 4px solid var(--team); padding-left: 6px; }
+  .sb-team::before { display: none; }
+  .sb-team:nth-child(3) { border-left: none; border-right: 4px solid var(--team); padding: 0 6px 0 0; text-align: right; }
+  .sb-score { font-size: 1.7rem; }
+  .sb-clock { grid-column: 1 / -1; text-align: center; min-width: 0; font-size: 0.75rem; margin-top: -4px; }
+  .controls { gap: 6px; margin: 8px 0; }
+  .controls button, .controls .toggle { padding: 0.4rem 0.6rem; font-size: 0.76rem; }
+  .controls .chip { font-size: 0.62rem; }
+  .topbar:has(+ .match) { display: none; }
+  .match { padding-top: 10px; }
+  canvas { max-height: calc(100svh - 345px); margin: 0 auto; border-radius: 18px; }
+  .callout { font-size: 0.82rem; padding: 0.55rem 0.9rem; bottom: 8px; }
+  .callout-key { display: none; }
+  .bench { display: flex; gap: 8px; overflow-x: auto; margin-top: 8px; padding: 2px 2px 6px; scroll-snap-type: x proximity; }
+  .pcard { flex: 0 0 158px; grid-template-columns: 40px 1fr; gap: 2px 8px; padding: 8px; border-radius: 18px; scroll-snap-align: start; }
+  .pcard img { width: 40px; height: 40px; grid-row: span 1; border-radius: 12px; }
+  .pc-name { font-size: 0.78rem; line-height: 1.25; }
+  .pc-name small { display: block; font-size: 0.68rem; }
+  .pc-stats { display: none; }
+  .evo-row { flex-wrap: wrap; margin-top: 4px; }
+  .evo-btn { flex: 1 1 100%; font-size: 0.72rem; padding: 0.5rem 0.4rem; }
+  .evo-btn kbd { display: none; }
+  .evo-cycle, .sub-btn { flex: 1; font-size: 0.72rem; padding: 0.45rem 0.4rem; }
+  .sub-panel { inset: 6px; padding: 12px; }
+
+  /* fine partita */
+  .result-hero { padding: 18px 14px; }
+  .result-score { gap: 10px; }
+  .rs-team b { font-size: 0.95rem; }
+  .rs-num { font-size: 2.4rem; }
+  .result-banner { flex-direction: column; align-items: flex-start; gap: 10px; }
+  .offer { grid-template-columns: 52px 1fr; }
+  .offer img { width: 52px; height: 52px; }
+  .offer-actions { grid-column: 1 / -1; }
+  .offer-actions button { flex: 1; }
+  .exp-grid { grid-template-columns: 1fr; }
+  .boxscores { overflow-x: auto; }
+  .boxscore { table-layout: auto; }
+}
+
+/* ───────── telefono in orizzontale: campo a sinistra, i tuoi Pokémon in colonna a destra ───────── */
+@media (max-height: 500px) and (orientation: landscape) {
+  #app { padding: 0 10px 10px; }
+  .topbar:has(+ .match) { display: none; }
+  .match { display: grid; grid-template-columns: auto minmax(190px, 1fr); grid-template-rows: auto auto 1fr; gap: 6px 10px; padding-top: 6px; }
+  .scoreboard { grid-column: 1 / -1; padding: 4px 14px; gap: 10px; border-radius: 16px; }
+  .sb-team { font-size: 0.9rem; }
+  .sb-team::before { width: 10px; height: 10px; }
+  .sb-score { font-size: 1.4rem; }
+  .sb-clock { min-width: 0; font-size: 0.75rem; }
+  .controls { grid-column: 1 / -1; margin: 0; gap: 6px; }
+  .controls button, .controls .toggle { padding: 0.35rem 0.6rem; font-size: 0.74rem; }
+  .lbl-long { display: none; }
+  .lbl-short { display: inline; }
+  .arena { display: contents; }
+  .log { display: none; }
+  .pitch-wrap { grid-column: 1; }
+  canvas { max-height: calc(100svh - 104px); border-radius: 16px; }
+  .bench { grid-column: 2; display: flex; flex-direction: column; gap: 6px; margin: 0; overflow-y: auto; max-height: calc(100svh - 104px); }
+  .pcard { grid-template-columns: 36px 1fr; gap: 2px 8px; padding: 6px 8px; border-radius: 14px; border-top-width: 3px; }
+  .pcard img { width: 36px; height: 36px; grid-row: span 1; border-radius: 10px; }
+  .pc-name { font-size: 0.76rem; }
+  .pc-stats { display: none; }
+  .evo-row { margin-top: 2px; }
+  .evo-btn, .evo-cycle, .sub-btn { font-size: 0.7rem; padding: 0.35rem 0.4rem; }
+  .evo-btn kbd { display: none; }
+  .callout-key { display: none; }
 }
 
 .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; }
