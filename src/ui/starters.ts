@@ -52,7 +52,7 @@ export function renderStarterPick(app: HTMLElement, onConfirm: (keys: string[], 
           return `<button class="starter ${on ? 'picked' : ''}" data-role="${g.role}" data-key="${k}" ${disabled ? 'disabled' : ''}>
           <img src="${spriteUrl(sp.dex)}" alt="">
           <span class="st-body">
-            <span class="st-title"><b>${esc(sp.name)}</b> ${sp.types.map((t) => `<span class="chip">${TYPE_NAMES[t]}</span>`).join(' ')}</span>
+            <span class="st-title"><b>${esc(sp.name)}</b> ${sp.types.map((t) => `<span class="chip type-tag" data-type="${t}">${TYPE_NAMES[t]}</span>`).join(' ')}</span>
             <span class="st-role"><span class="role role-${g.role}">${g.role}</span> voto da ${ROLE_NAMES[g.role]} <b>${Math.round(rating)}</b>
               <span class="bar st-rating"><i style="width:${(rating / top) * 100}%"></i></span></span>
             <span class="pick-stats"><span>ATT <b>${st.att}</b></span><span>DIF <b>${st.dif}</b></span><span>VEL <b>${st.vel}</b></span><span>PV <b>${st.pv}</b></span></span>

@@ -987,3 +987,53 @@ canvas { width: auto; height: auto; max-width: 100%; max-height: calc(100vh - 32
 .dot-sky { background: var(--sky-deep); }
 .dot-star { background: var(--star-deep); }
 .dot-lilac { background: var(--lilac-deep); }
+
+/* confronto di tipo prima di una sfida */
+.matchup { margin-top: 14px; display: flex; flex-direction: column; gap: 10px; }
+.mu-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.mu-row { display: flex; flex-direction: column; gap: 6px; padding: 8px 10px; border-radius: 14px; background: var(--track); margin-top: 6px; }
+.mu-them { display: flex; align-items: center; gap: 8px; }
+.mu-them img { width: 40px; height: 40px; image-rendering: pixelated; flex: none; }
+.mu-list { display: flex; align-items: baseline; gap: 8px; }
+.mu-list > small { flex: none; width: 82px; color: var(--ink-mute); }
+.mu-list > span { display: flex; flex-wrap: wrap; gap: 4px; }
+.mu-list .chip { font-size: 0.68rem; padding: 0.15rem 0.5rem; }
+.mu-list .chip.in-lineup { font-weight: 800; box-shadow: inset 0 0 0 2px currentColor; }
+
+/* tipi toccabili e il loro fumetto */
+.type-tag, [data-type] { cursor: help; }
+.chip.type-tag { border: none; font: inherit; font-size: 0.72rem; text-decoration: underline dotted; text-underline-offset: 3px; }
+.types .type-tag { text-decoration: underline dotted; text-underline-offset: 3px; }
+.type-pop { position: fixed; z-index: 60; width: min(320px, calc(100vw - 16px)); padding: 12px 14px; font-size: 0.82rem; box-shadow: 0 18px 40px -12px rgba(0, 0, 0, 0.35); }
+.type-pop dl { display: grid; grid-template-columns: auto 1fr; gap: 4px 10px; margin: 8px 0; }
+.type-pop dt { color: var(--ink-mute); font-weight: 600; }
+.type-pop dd { margin: 0; }
+.type-pop small { color: var(--ink-mute); }
+
+/* ordine e filtro di tribuna e PC */
+.sort-bar { display: flex; gap: 12px; flex-wrap: wrap; margin: 6px 0 8px; font-size: 0.82rem; color: var(--ink-soft); }
+.sort-bar select { margin-left: 4px; padding: 0.2rem 0.5rem; }
+
+/* annulla e promemoria */
+.undo-toast { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.undo-toast button { margin-left: auto; padding: 0.25rem 0.8rem; }
+.backup-nudge { display: flex; align-items: center; gap: 14px; margin: 12px 0; border-left: 6px solid var(--sky-deep); }
+.backup-nudge > div { display: flex; flex-direction: column; gap: 2px; }
+.backup-nudge .nudge-actions { margin-left: auto; display: flex; gap: 8px; align-items: center; flex: none; }
+@media (max-width: 700px) {
+  .backup-nudge { flex-wrap: wrap; }
+  .backup-nudge .nudge-actions { margin-left: 0; }
+}
+
+/* fumetti guida */
+.coach { position: fixed; z-index: 70; width: min(320px, calc(100vw - 16px)); padding: 14px 16px; display: flex; flex-direction: column; gap: 4px; box-shadow: 0 20px 50px -12px rgba(0, 0, 0, 0.45); border: 2px solid var(--lilac-deep); }
+.coach p { margin: 2px 0 6px; font-size: 0.88rem; }
+.coach-actions { display: flex; justify-content: flex-end; gap: 8px; }
+.coach-target { outline: 3px solid var(--pink-deep); outline-offset: 4px; border-radius: 14px; position: relative; z-index: 5; }
+.type-pop, .coach { background: var(--bg); }
+
+/* app installata su iPhone: la barra in alto passa sotto l'orologio e la tacca */
+body .topbar { padding-top: calc(8px + env(safe-area-inset-top)); }
+.install-card { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.install-card img { width: 52px; height: 52px; border-radius: 12px; flex: none; }
+.install-card > div { flex: 1 1 220px; display: flex; flex-direction: column; gap: 2px; }
