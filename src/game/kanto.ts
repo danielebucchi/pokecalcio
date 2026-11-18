@@ -76,7 +76,8 @@ export const KANTO: KantoLocation[] = [
   },
   {
     id: 'monte-luna', name: 'Monte Luna', kind: 'dungeon', x: 430, y: 140, badges: 1, level: 32,
-    wild: ['zubat', 'geodude', 'paras', 'clefairy'],
+    // Onix non è tra gli starter (è il portiere migliore): si guadagna qui, subito dopo Brock
+    wild: ['zubat', 'geodude', 'paras', 'clefairy', 'onix'],
     trainers: [
       { id: 'luna-rocket', name: 'Recluta Team Rocket', team: ['rattata', 'zubat', 'ekans'] },
       { id: 'luna-sapientone', name: 'Sapientone', team: ['grimer', 'voltorb', 'koffing', 'omanyte', 'kabuto'] },

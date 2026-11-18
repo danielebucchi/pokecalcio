@@ -142,7 +142,8 @@ function playMatch(kind: ChallengeKind, trainerId?: string, skip = false) {
     : kind === 'legendary' ? c.legendary!
     : c.wild;
   (skip ? skipMatch : runMatch)(app, [clubTeam(save), opponent], {
-    knockout: kind === 'league',
+    // in palestra e in Lega non si pareggia: si va ai rigori
+    knockout: kind === 'league' || kind === 'gym',
     onFinish(match) {
       // gli esiti vanno registrati prima di awardMatch, che fa avanzare la giornata
       const banner =

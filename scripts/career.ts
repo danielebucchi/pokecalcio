@@ -46,7 +46,7 @@ function play(save: SaveData, opponent: TeamSetup, kind: Kind): boolean {
   save.bench = autoBench(save);
   const home = clubTeam(save);
   home.controlled = false;
-  const m = new Match([home, opponent], { knockout: kind === 'lega' });
+  const m = new Match([home, opponent], { knockout: kind === 'lega' || kind === 'palestra' });
   while (!m.finished) m.step(1 / 60);
   // come un giocatore: accetta chi chiede di unirsi se c'è posto o se è meglio della riserva più debole
   if (kind === 'selvatici') {

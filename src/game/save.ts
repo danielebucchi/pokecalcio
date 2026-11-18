@@ -62,20 +62,23 @@ export function arriveAt(save: SaveData, id: string): number {
 
 /**
  * La prima squadra si sceglie per ruoli, come in un draft: 1 portiere su 5, 2 difensori su 8 e
- * 2 attaccanti su 8. Forme base di Kanto di forza paragonabile, scelte per voto nel ruolo; niente
- * Pokémon già forti in partenza (Scyther, Tangela…): sbilancerebbero l'inizio contro Brock.
+ * 2 attaccanti su 8. Si parte al livello 30 e si evolve subito in partita, quindi conta la forma
+ * più evoluta raggiungibile entro il tetto di Brock (32): tutte nella stessa fascia (somma delle
+ * statistiche ~345-425). Fuori chi diventa troppo forte (Bulbasaur → Venusaur al 32, Tentacool →
+ * Tentacruel, Drowzee → Hypno, Krabby → Kingler, Magikarp → Gyarados) e chi è fuori scala nel ruolo
+ * (Onix portiere, Abra/Kadabra in attacco).
  * La squadra va in campo nel Quadrato (2-2), che è proprio portiere, 2 difensori e 2 attaccanti.
  */
 export const STARTER_GROUPS = [
-  { role: 'POR', label: 'Portiere', count: 1, pool: ['onix', 'tentacool', 'drowzee', 'cubone', 'shellder'] },
-  { role: 'DIF', label: 'Difensori', count: 2, pool: ['squirtle', 'bulbasaur', 'geodude', 'krabby', 'sandshrew', 'koffing', 'exeggcute', 'seel'] },
-  { role: 'ATT', label: 'Attaccanti', count: 2, pool: ['charmander', 'pikachu', 'abra', 'gastly', 'mankey', 'growlithe', 'eevee', 'dratini'] },
+  { role: 'POR', label: 'Portiere', count: 1, pool: ['geodude', 'cubone', 'lickitung', 'poliwag', 'rhyhorn'] },
+  { role: 'DIF', label: 'Difensori', count: 2, pool: ['squirtle', 'oddish', 'machop', 'paras', 'kabuto', 'koffing', 'exeggcute', 'shellder'] },
+  { role: 'ATT', label: 'Attaccanti', count: 2, pool: ['charmander', 'pikachu', 'gastly', 'dratini', 'diglett', 'rattata', 'ponyta', 'weedle'] },
 ] as const;
 export const STARTER_POOL: string[] = STARTER_GROUPS.flatMap((g) => [...g.pool]);
 export const STARTER_COUNT = 5;
 export const STARTER_LEVEL = 30;
 /** Squadra usata dalle simulazioni: portiere, 2 difensori, 2 attaccanti (in quest'ordine). */
-export const DEFAULT_STARTERS = ['onix', 'squirtle', 'bulbasaur', 'mankey', 'abra'];
+export const DEFAULT_STARTERS = ['geodude', 'squirtle', 'oddish', 'gastly', 'diglett'];
 
 /** Nuova carriera senza squadra: la si sceglie con chooseStarters (schermata iniziale). */
 export function newSave(): SaveData {
