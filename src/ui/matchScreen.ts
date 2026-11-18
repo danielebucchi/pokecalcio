@@ -10,6 +10,13 @@ import { spriteUrl } from './sprites';
 import { bindThemeToggle, themeToggleHtml } from './theme';
 
 const AUTO_EVO_KEY = 'pokecalcio-autoevo';
+/** Velocità della partita: l'ultima scelta resta per le partite successive. */
+const SPEED_KEY = 'pokecalcio-speed';
+const SPEEDS = [1, 2, 4, 8];
+const savedSpeed = () => {
+  const v = Number(localStorage.getItem(SPEED_KEY));
+  return SPEEDS.includes(v) ? v : 1;
+};
 
 /** Etichetta della cronaca per tipo di evento: [testo, colore della chip]. */
 const EVENT_TAGS: Partial<Record<MatchEvent['kind'], [string, string]>> = {
@@ -66,7 +73,9 @@ export interface RosterState {
   count: number;
   max: number;
   /** Chi si può lasciare andare (non chi è in formazione). */
-  releasable: { uid: string; speciesKey: string; level: number }[];
+  releasable: { uid: string; speciesKey: string; level: number; name: string }[];
+  /** Specie di tutta la rosa, per dire subito se ce n'è già uno uguale. */
+  species: string[];
 }
 
 /** Gioca la partita dentro `app`. Restituisce una funzione che ferma il ciclo. */
@@ -93,7 +102,7 @@ export function runMatch(app: HTMLElement, teams: [TeamSetup, TeamSetup], cb: Ma
       </div>
       <div class="controls">
         <button id="pause">Pausa</button>
-        <span class="speed">${[1, 2, 4].map((s) => `<button data-speed="${s}" class="${s === 1 ? 'on' : ''}">${s}×</button>`).join('')}</span>
+        <span class="speed">${SPEEDS.map((s) => `<button data-speed="${s}" class="${s === savedSpeed() ? 'on' : ''}">${s}×</button>`).join('')}</span>
         <span id="subsLeft" class="chip chip-sky" title="Sostituzioni rimaste: chi esce non rientra"></span>
         <label class="toggle" title="Fa evolvere i tuoi Pokémon appena possibile, scegliendo il ramo più forte">
           <input type="checkbox" id="autoevo"> <span class="lbl-long">Evoluzione automatica</span><span class="lbl-short">Auto-evo</span>
@@ -168,7 +177,7 @@ export function runMatch(app: HTMLElement, teams: [TeamSetup, TeamSetup], cb: Ma
     });
   });
 
-  let speed = 1;
+  let speed = savedSpeed();
   let paused = false;
   const pauseBtn = document.getElementById('pause')!;
   const setPaused = (v: boolean) => {
@@ -179,6 +188,7 @@ export function runMatch(app: HTMLElement, teams: [TeamSetup, TeamSetup], cb: Ma
   document.querySelectorAll<HTMLButtonElement>('[data-speed]').forEach((b) => {
     b.onclick = () => {
       speed = Number(b.dataset.speed);
+      localStorage.setItem(SPEED_KEY, String(speed));
       document.querySelectorAll('[data-speed]').forEach((o) => o.classList.toggle('on', o === b));
     };
   });
@@ -355,6 +365,13 @@ export function skipMatch(app: HTMLElement, teams: [TeamSetup, TeamSetup], cb: M
   showPostMatch(app, match, humanTeam, report, banner, cb.onLeave, offers ?? [], cb.recruit, cb.roster);
 }
 
+/** Poké Ball accanto al nome se in rosa c'è già la stessa specie (come nel Pokédex dei giochi). */
+function ownedBall(count: number): string {
+  if (!count) return '';
+  const title = `Ce l'hai già${count > 1 ? `: ne hai ${count}` : ''}`;
+  return ` <span class="owned-ball" title="${title}" aria-label="${title}"></span>${count > 1 ? `<small class="owned-count">×${count}</small>` : ''}`;
+}
+
 function showPostMatch(
   app: HTMLElement, match: Match, humanTeam: 0 | 1, report: ExpReport[], banner: MatchBanner | undefined, onLeave: () => void,
   offers: RecruitOffer[] = [], recruit?: MatchCallbacks['recruit'], roster?: MatchCallbacks['roster'],
@@ -367,10 +384,11 @@ function showPostMatch(
     return `<div class="offer" data-offer="${i}">
       <img src="${spriteUrl(sp.dex)}" alt="">
       <div class="offer-body">
-        <span class="offer-title"><b>${esc(sp.name)}</b> <small>Lv${o.inst.level}</small> ${sp.types.map((t) => `<span class="chip">${TYPE_NAMES[t]}</span>`).join(' ')}</span>
+        <span class="offer-title"><b>${esc(sp.name)}</b>${ownedBall(roster?.().species.filter((k) => k === o.inst.speciesKey).length ?? 0)} <small>Lv${o.inst.level}</small> ${sp.types.map((t) => `<span class="chip">${TYPE_NAMES[t]}</span>`).join(' ')}</span>
         <div class="pick-stats"><span>ATT <b>${g.att}</b></span><span>DIF <b>${g.dif}</b></span><span>VEL <b>${g.vel}</b></span><span>PV <b>${g.pv}</b></span>
           <span><span class="role role-${best}">${best}</span> voto ${Math.round(ratings[best])}</span></div>
         <small class="muted">Vuole unirsi a te: ${esc(o.reason)}.</small>
+
       </div>
       <div class="offer-actions">
         <button class="primary" data-accept="${i}">Accetta</button>
@@ -500,14 +518,14 @@ function showPostMatch(
       box.classList.add('swap');
       box.innerHTML = `<p class="swap-title">Rosa piena (${st.count}/${st.max}): chi lasci andare per fargli posto?</p>
         <div class="swap-list">${st.releasable
-          .map((r) => `<button data-release="${r.uid}"><img src="${spriteUrl(POKEDEX[r.speciesKey].dex)}" alt=""> ${esc(POKEDEX[r.speciesKey].name)} <small>Lv${r.level}</small></button>`)
+          .map((r) => `<button data-release="${r.uid}"><img src="${spriteUrl(POKEDEX[r.speciesKey].dex)}" alt=""> ${esc(r.name)} <small>Lv${r.level}</small></button>`)
           .join('')}</div>
         <button class="link" data-cancel>Annulla</button>`;
       box.querySelectorAll<HTMLButtonElement>('[data-release]').forEach((r) => {
         r.onclick = () => {
           const out = st.releasable.find((x) => x.uid === r.dataset.release)!;
           box.classList.remove('swap');
-          if (recruit?.(offers[i].inst, out.uid) !== false) joined(i, POKEDEX[out.speciesKey].name);
+          if (recruit?.(offers[i].inst, out.uid) !== false) joined(i, out.name);
         };
       });
       box.querySelector<HTMLButtonElement>('[data-cancel]')!.onclick = () => {

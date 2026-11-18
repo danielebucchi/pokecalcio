@@ -16,6 +16,8 @@ export interface TeamSetup {
   roster: { inst: PokemonInstance; role: Role; home: [number, number] }[];
   /** Panchina: chi può entrare con una sostituzione. */
   bench?: PokemonInstance[];
+  /** Bonus delle medaglie su tutta la squadra (moltiplicatori), come in Rosso/Blu. */
+  bonus?: Partial<Record<keyof GameStats, number>>;
 }
 
 // Campo da calcio a 5 "ingrandito": 100 × 60, coordinate in metri.
@@ -40,7 +42,30 @@ export const MAX_SUBS = 2;
 const PACE_LEVEL = 32;
 const SHOT_RANGE = 36;
 /** Quanto sale ogni ruolo quando la squadra ha palla. */
-const ATTACK_PUSH: Record<Role, number> = { POR: 0, DIF: 9, CEN: 14, ATT: 6 };
+/**
+ * Quanto ogni ruolo si sposta dalla sua posizione base secondo la fase di gioco (metri verso la porta
+ * avversaria in possesso, verso la propria senza palla) e quanto stringe al centro senza palla.
+ * Dipende dal modulo, come nel calcio a 5 vero:
+ * - Rombo (1-2-1): i centrocampisti in possesso attaccano quasi in linea con la punta, senza palla
+ *   scendono a dare man forte al difensore.
+ * - Quadrato (2-2): in possesso i difensori salgono a fare i centrocampisti, senza palla sono gli
+ *   attaccanti a tornare a centrocampo.
+ * Dosati perché con gli stessi Pokémon i due moduli si equivalgano (/tmp/shapes: ~47% contro ~45%).
+ */
+export const PHASE_SHIFT: Record<'rombo' | 'quadrato', Record<Role, { attack: number; defend: number; narrow: number }>> = {
+  rombo: {
+    POR: { attack: 0, defend: 0, narrow: 0 },
+    DIF: { attack: 8, defend: 3, narrow: 0 },
+    CEN: { attack: 16, defend: 6, narrow: 0.1 },
+    ATT: { attack: 6, defend: 6, narrow: 0.2 },
+  },
+  quadrato: {
+    POR: { attack: 0, defend: 0, narrow: 0 },
+    DIF: { attack: 10, defend: 3, narrow: 0 },
+    CEN: { attack: 14, defend: 6, narrow: 0.2 },
+    ATT: { attack: 6, defend: 6, narrow: 0.15 },
+  },
+};
 
 /** Probabilità base di fallo in un contrasto (scalata da quanto è "irruento" chi entra). */
 const FOUL_BASE = 0.1;
@@ -172,7 +197,8 @@ function distToSegment(px: number, py: number, ax: number, ay: number, bx: numbe
   return dist(px, py, ax + t * dx, ay + t * dy);
 }
 
-export const formName = (p: Player) => POKEDEX[p.formKey].name;
+/** Nome in partita: il soprannome se c'è, altrimenti la forma attuale. */
+export const formName = (p: Player) => p.inst.nickname || POKEDEX[p.formKey].name;
 const emptyTally = (): Player['tally'] => ({ goals: 0, assists: 0, saves: 0, tackles: 0, kos: 0, evolutions: 0, shots: 0, fouls: 0 });
 export const isActive = (p: Player) => p.koTimer <= 0;
 
@@ -211,10 +237,13 @@ export class Match {
   private nextAiSubCheck = 0;
   /** Fattore di ritmo: PACE_LEVEL / livello medio dei titolari. */
   private readonly pace: number;
+  /** Modulo di ogni squadra, dal ruolo dei titolari: con centrocampisti è il Rombo, senza il Quadrato. */
+  private readonly shape: ['rombo' | 'quadrato', 'rombo' | 'quadrato'];
 
   constructor(teams: [TeamSetup, TeamSetup], opts: { knockout?: boolean } = {}) {
     this.teams = teams;
     this.knockout = opts.knockout ?? false;
+    this.shape = teams.map((t) => (t.roster.some((r) => r.role === 'CEN') ? 'rombo' : 'quadrato')) as Match['shape'];
     this.bench = [[...(teams[0].bench ?? [])], [...(teams[1].bench ?? [])]];
     let id = 0;
     teams.forEach((t, ti) => {
@@ -365,7 +394,15 @@ export class Match {
 
   private recompute(p: Player, keepHpRatio: boolean) {
     const sp = POKEDEX[p.formKey];
-    const g = gameStats(realStats(sp, p.inst));
+    const base = gameStats(realStats(sp, p.inst));
+    // bonus delle medaglie della squadra e tecnica Scatto
+    const bonus = this.teams[p.team].bonus ?? {};
+    const g: GameStats = {
+      att: Math.round(base.att * (bonus.att ?? 1)),
+      dif: Math.round(base.dif * (bonus.dif ?? 1)),
+      vel: Math.round(base.vel * (bonus.vel ?? 1) * (p.inst.technique === 'scatto' ? 1.1 : 1)),
+      pv: Math.round(base.pv * (bonus.pv ?? 1)),
+    };
     const ratio = keepHpRatio && p.maxHp > 0 ? p.hp / p.maxHp : 1;
     p.stats = g;
     p.maxHp = g.pv;
@@ -402,6 +439,10 @@ export class Match {
     }
 
     this.time += dt;
+    // tecnica Rigenerazione: recupera il 2% dei PV per minuto di gioco
+    for (const p of this.players) {
+      if (p.inst.technique === 'rigenerazione' && isActive(p)) p.hp = Math.min(p.maxHp, p.hp + (p.maxHp * 0.02 * dt) / SIM_PER_MINUTE);
+    }
     if (!this.halftimeDone && this.time >= MATCH_SECONDS / 2) {
       this.halftimeDone = true;
       for (const p of this.players) if (isActive(p)) p.hp = Math.min(p.maxHp, p.hp + p.maxHp * 0.25);
@@ -592,8 +633,11 @@ export class Match {
     const dir = attackDir(p.team);
     // durante un passaggio il possesso resta a chi ha toccato per ultimo
     const attacking = (b.owner ?? b.lastTouch)?.team === p.team;
-    let tx = p.homeX + (b.x - FIELD_W / 2) * 0.5 + (attacking ? dir * ATTACK_PUSH[p.role] : -dir * 3);
-    let ty = p.homeY + (b.y - CY) * 0.45;
+    const shift = PHASE_SHIFT[this.shape[p.team]][p.role];
+    let tx = p.homeX + (b.x - FIELD_W / 2) * 0.5 + (attacking ? dir * shift.attack : -dir * shift.defend);
+    // senza palla chi rientra stringe verso il centro, a coprire la linea di passaggio verso la porta
+    const homeY = attacking ? p.homeY : p.homeY + (CY - p.homeY) * shift.narrow;
+    let ty = homeY + (b.y - CY) * 0.45;
     const progress = (b.x - ownGoalX(p.team)) * dir;
     if (attacking && p.role === 'CEN' && progress > 50) {
       // inserimento: il centrocampista entra in area sul suo lato
@@ -828,7 +872,7 @@ export class Match {
     const speed = opts.speed ?? 28 + p.stats.att * 0.22 * this.pace;
     const ang = Math.atan2(ty - this.ball.y, tx - this.ball.x);
     this.release(p, Math.cos(ang) * speed, Math.sin(ang) * speed);
-    const power = (opts.power ?? p.stats.att) * (0.85 + Math.random() * 0.3);
+    const power = (opts.power ?? p.stats.att) * (0.85 + Math.random() * 0.3) * (p.inst.technique === 'potenza' ? 1.12 : 1);
     this.ball.shot = { shooter: p, power, tried: new Set([p.id]), from: opts.from };
     this.lastFinish = { shooter: p, from: opts.from, time: this.time };
     p.pickupCd = 0.5;
@@ -935,7 +979,8 @@ export class Match {
     if (Math.abs(projY - CY) > GOAL_HALF + 1) return; // va fuori, il portiere lascia sfilare
 
     b.shot.tried.add(k.id);
-    const par = keeperRating(k.stats) * typeMultiplier(k.types, shooter.types) * (0.7 + (0.3 * k.hp) / k.maxHp);
+    const par = keeperRating(k.stats) * typeMultiplier(k.types, shooter.types) * (0.7 + (0.3 * k.hp) / k.maxHp)
+      * (k.inst.technique === 'riflessi' ? 1.15 : 1) * (shooter.inst.technique === 'giro' ? 0.85 : 1);
     const edge = 1 - 0.35 * (d / k.reach);
     // sul rigore il portiere deve indovinare l'angolo
     const guess = b.shot.from === 'penalty' ? 0.45 : 1;
@@ -1035,7 +1080,7 @@ export class Match {
   // ───────────────────────────── calci piazzati ─────────────────────────────
 
   private headerOf(p: Player): number {
-    return headerRating(p.stats, p.heightDm);
+    return headerRating(p.stats, p.heightDm) * (p.inst.technique === 'testa' ? 1.2 : 1);
   }
 
   private outfield(team: 0 | 1, except?: Player): Player[] {
@@ -1287,7 +1332,7 @@ export class Match {
   private duel(o: Player, q: Player) {
     const hpO = 0.6 + (0.4 * o.hp) / o.maxHp;
     const hpQ = 0.6 + (0.4 * q.hp) / q.maxHp;
-    const defPow = q.stats.dif * typeMultiplier(q.types, o.types) * hpQ;
+    const defPow = q.stats.dif * typeMultiplier(q.types, o.types) * hpQ * (q.inst.technique === 'pressing' ? 1.15 : 1);
     const attPow = o.stats.att * typeMultiplier(o.types, q.types) * hpO * 1.15;
     o.duelCd = q.duelCd = 1;
     // chi entra con tanto ATT e poca DIF è irruento e fa più falli
@@ -1330,6 +1375,7 @@ export class Match {
   /** Formula dei danni Pokémon semplificata (potenza 28, rapporto ATT/DIF attenuato). */
   private damage(attacker: Player, target: Player, mult: number) {
     if (!isActive(target)) return;
+    if (target.inst.technique === 'muro') mult *= 0.75;
     const L = attacker.inst.level;
     const raw = (((2 * L) / 5 + 2) * 28 * Math.sqrt(attacker.stats.att / target.stats.dif)) / 50 + 1;
     target.hp -= raw * typeMultiplier(attacker.types, target.types) * (0.85 + Math.random() * 0.15) * mult;

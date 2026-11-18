@@ -3,14 +3,15 @@ import { POKEDEX } from './data/pokedex';
 import { GYMS, nextGym, type Gym } from './game/gyms';
 import { FLY_BADGES, locationById, neighbors, type RouteTrainer } from './game/kanto';
 import {
-  ROUND_NAMES, YOU, advanceLeague, currentRound, newLeagueRun, opponentOf, trainerById, type LeagueResult,
+  CHAMPION_ID, ROUND_NAMES, YOU, advanceLeague, currentRound, newLeagueRun, opponentOf, trainerById, type LeagueResult,
 } from './game/league';
 import { awardMatch } from './game/progression';
+import { registerMatch } from './game/dex';
 import { recruitOffers, type RecruitOffer } from './game/recruit';
-import { ROSTER_MAX, addToRoster, arriveAt, chooseStarters, lineupProblem, loadSave, newSave, releasable, storeSave, type SaveData } from './game/save';
+import { ROSTER_MAX, addToRoster, arriveAt, recordHistory, chooseStarters, lineupProblem, rivalGate, loadSave, newSave, releasable, storeSave, type SaveData } from './game/save';
 import type { Match, TeamSetup } from './match/engine';
 import {
-  buildGymTeam, buildLeagueTeam, buildLegendaryTeam, buildTrainerTeam, buildWildTeam, clubTeam, simulateMatch,
+  buildChampionTeam, buildEventTeam, buildGymTeam, buildRematchTeam, postGameLevels, buildLeagueTeam, buildLegendaryTeam, buildTrainerTeam, buildWildTeam, clubTeam, simulateMatch,
 } from './match/teams';
 import { renderHub, type ChallengeKind, type Challenges, type HubState } from './ui/hub';
 import { runMatch, skipMatch, type MatchBanner } from './ui/matchScreen';
@@ -35,7 +36,8 @@ function cached(key: string, build: () => TeamSetup): TeamSetup {
 
 function challenges(): Challenges {
   const loc = locationById(save.location);
-  const gym = loc.gym === save.badges ? (nextGym(save.badges) ?? null) : null;
+  // la palestra riceve solo se hai battuto il rivale che la precede (M/N Anna, Silph SpA)
+  const gym = loc.gym === save.badges && !rivalGate(save, loc, true) ? (nextGym(save.badges) ?? null) : null;
   const trainers = loc.trainers.map((t) => ({
     trainer: t,
     team: cached(`trainer:${t.id}`, () => buildTrainerTeam(loc, t)),
@@ -46,7 +48,7 @@ function challenges(): Challenges {
     const run = save.league;
     const oppId = run ? opponentOf(run, YOU) : null;
     const trainer = oppId ? trainerById(oppId)! : null;
-    const team = run && trainer ? cached(`league:${run.edition}:${currentRound(run)}:${scoutKey()}`, () => buildLeagueTeam(trainer, scout())) : null;
+    const team = run && trainer ? cached(`league:${run.edition}:${currentRound(run)}:${scoutKey()}`, () => buildLeagueTeam(trainer, scout(), postGameLevels(save.titles))) : null;
     league = { run, opponent: trainer, team };
   }
   return {
@@ -61,6 +63,14 @@ function challenges(): Challenges {
       ? cached(`legendary:${loc.id}`, () => buildLegendaryTeam(loc))
       : null,
     league,
+    // vinto il torneo, manca il Campione Blu
+    champion: loc.league && save.league?.champion === YOU && save.league.championMatch === 'pending'
+      ? cached(`champion:${save.league.edition}:${scoutKey()}`, () => buildChampionTeam(trainerById(CHAMPION_ID)!, scout(), postGameLevels(save.titles)))
+      : null,
+    // dopo il titolo, rivincita con il capopalestra della città
+    rematch: save.titles > 0 && loc.gym !== undefined && loc.gym < save.badges
+      ? cached(`rematch:${loc.gym}:${scoutKey()}`, () => buildRematchTeam(GYMS[loc.gym!], scout(), postGameLevels(save.titles - 1)))
+      : null,
   };
 }
 
@@ -69,6 +79,8 @@ export function canTravel(id: string): boolean {
   const target = locationById(id);
   if (id === save.location || target.badges > save.badges) return false;
   if (target.requiresChampion && !save.titles) return false;
+  // le sfide con il rivale sono tappe obbligate: chiudono la strada finché non lo batti
+  if (rivalGate(save, target)) return false;
   if (neighbors(save.location).includes(id)) return true;
   return save.badges >= FLY_BADGES && target.kind === 'city' && save.visited.includes(id);
 }
@@ -76,8 +88,9 @@ export function canTravel(id: string): boolean {
 function showHub() {
   // carriera nuova: prima si sceglie la squadra
   if (!save.roster.length) {
-    renderStarterPick(app, (keys) => {
+    renderStarterPick(app, (keys, clubName) => {
       chooseStarters(save, keys);
+      if (clubName) save.clubName = clubName;
       storeSave(save);
       showHub();
     });
@@ -135,27 +148,59 @@ function lineupLevel(): number {
 function playMatch(kind: ChallengeKind, trainerId?: string, skip = false) {
   const c = challenges();
   const route = kind === 'trainer' ? c.trainers.find((t) => t.trainer.id === trainerId) : undefined;
+  // eventi: trainerId è "idEvento:specie" (per gli eventi a scelta si gioca per un Pokémon preciso)
+  const [eventId, eventSpecies] = kind === 'event' ? trainerId!.split(':') : [];
+  const event = kind === 'event' ? c.location.events!.find((e) => e.id === eventId)! : undefined;
   const opponent =
-    kind === 'gym' ? c.gymTeam!
+    kind === 'event' ? cached(`event:${eventId}:${eventSpecies}`, () => buildEventTeam(c.location, event!, eventSpecies))
+    : kind === 'gym' ? c.gymTeam!
     : kind === 'league' ? c.league!.team!
     : kind === 'trainer' ? route!.team
     : kind === 'legendary' ? c.legendary!
+    : kind === 'champion' ? c.champion!
+    : kind === 'rematch' ? c.rematch!
     : c.wild;
   (skip ? skipMatch : runMatch)(app, [clubTeam(save), opponent], {
     // in palestra e in Lega non si pareggia: si va ai rigori
-    knockout: kind === 'league' || kind === 'gym',
+    knockout: kind === 'league' || kind === 'gym' || kind === 'champion' || kind === 'rematch',
     onFinish(match) {
+      // titolo per lo storico, prima che gli esiti cambino lo stato (la Lega passa al turno dopo)
+      const historyTitle =
+        kind === 'gym' ? `Palestra di ${c.gym!.leader}`
+        : kind === 'league' ? `Lega · ${ROUND_NAMES[currentRound(save.league!)]} contro ${c.league!.opponent!.name}`
+        : kind === 'trainer' ? route!.trainer.name
+        : kind === 'legendary' ? `Leggendario: ${POKEDEX[c.location.legendary!.key].name}`
+        : kind === 'event' ? `Evento: ${event!.title}`
+        : kind === 'champion' ? 'Lega · il Campione Blu'
+        : kind === 'rematch' ? `Rivincita con ${GYMS[c.location.gym!].leader}`
+        : null;
+      if (historyTitle) {
+        recordHistory(save, {
+          matchday: save.matchday,
+          title: historyTitle,
+          score: [match.score[0], match.score[1]],
+          penalties: match.shootout ? [match.shootout.score[0], match.shootout.score[1]] : undefined,
+          won: match.winner === 0,
+        });
+      }
       // gli esiti vanno registrati prima di awardMatch, che fa avanzare la giornata
       const banner =
         kind === 'gym' ? gymOutcome(c.gym!, match)
         : kind === 'league' ? leagueOutcome(match)
         : kind === 'trainer' ? trainerOutcome(route!.trainer, match)
         : kind === 'legendary' ? legendaryOutcome(match)
+        : kind === 'event' ? eventOutcome(event!.title, eventSpecies, match)
+        : kind === 'champion' ? championOutcome(match)
+        : kind === 'rematch' ? rematchOutcome(GYMS[c.location.gym!], match)
         : undefined;
       // dopo una partitella vinta qualche selvatico chiede di unirsi, battuto il leggendario è lui
       // a chiederlo: si accetta (o si fa posto nella rosa) nel resoconto
-      const offers = kind === 'wild' ? recruitOffers(match, 0) : kind === 'legendary' ? legendaryOffer(match) : [];
+      const offers = kind === 'wild' ? recruitOffers(match, 0)
+        : kind === 'legendary' ? legendaryOffer(match)
+        : kind === 'event' ? eventOffer(eventSpecies, match)
+        : [];
       const report = awardMatch(save, match, 0);
+      registerMatch(save, match, 0);
       storeSave(save);
       return { report, banner, offers };
     },
@@ -163,6 +208,8 @@ function playMatch(kind: ChallengeKind, trainerId?: string, skip = false) {
       if (!addToRoster(save, inst, releaseUid)) return false;
       const legendary = locationById(save.location).legendary;
       if (kind === 'legendary' && legendary?.key === inst.speciesKey) save.legendaries.push(inst.speciesKey);
+      // l'evento si chiude quando accetti il Pokémon (se lo lasci andare, puoi rigiocare la sfida)
+      if (kind === 'event' && inst.speciesKey === eventSpecies && !save.events.includes(eventId)) save.events.push(eventId);
       storeSave(save);
       return true;
     },
@@ -170,13 +217,14 @@ function playMatch(kind: ChallengeKind, trainerId?: string, skip = false) {
       return {
         count: save.roster.length,
         max: ROSTER_MAX,
-        releasable: releasable(save).map((p) => ({ uid: p.uid, speciesKey: p.speciesKey, level: p.level })),
+        releasable: releasable(save).map((p) => ({ uid: p.uid, speciesKey: p.speciesKey, level: p.level, name: p.nickname || POKEDEX[p.speciesKey].name })),
+        species: save.roster.map((p) => p.speciesKey),
       };
     },
     onLeave(counted = true) {
       hub.message = null;
       // a fine partita, se hai sessioni da usare, si apre l'allenamento (altrimenti ce se ne dimentica)
-      if (counted && (save.sessionsLeft > 0 || save.sparringLeft > 0)) hub.tab = 'training';
+      if (counted && save.sessionsLeft > 0) hub.tab = 'training';
       showHub();
     },
   });
@@ -188,6 +236,21 @@ function trainerOutcome(t: RouteTrainer, match: Match): MatchBanner {
   }
   if (!save.defeated.includes(t.id)) save.defeated.push(t.id);
   return { title: `Hai battuto ${t.name}!`, text: `Allenatori battuti finora: ${save.defeated.length}.`, color: '#8ec5d8' };
+}
+
+/** Sfida di un evento: vinta, il Pokémon in palio chiede di unirsi a te. */
+function eventOutcome(title: string, species: string, match: Match): MatchBanner {
+  const name = POKEDEX[species].name;
+  if (match.winner !== 0) {
+    return { title: `${name} non è ancora convinto`, text: `${title}: riprova quando vuoi, la sfida resta aperta.`, color: '#e8a317' };
+  }
+  return { title: `${name} vuole unirsi alla tua squadra!`, text: `${title}: accetta qui sotto. Se lo lasci andare, puoi rigiocare la sfida.`, color: '#e8a317' };
+}
+
+function eventOffer(species: string, match: Match): RecruitOffer[] {
+  if (match.winner !== 0) return [];
+  const p = match.appearances.find((x) => x.team === 1 && x.inst.speciesKey === species);
+  return p ? [{ inst: p.inst, reason: 'hai vinto la sua sfida' }] : [];
 }
 
 /** Battuto il leggendario, vuole unirsi a te: niente tasso di cattura, basta accettare. */
@@ -251,8 +314,13 @@ function leagueOutcome(match: Match): MatchBanner {
   });
   const color = trainerById(oppId)!.color;
   if (run.champion === YOU) {
-    save.titles++;
-    return { title: 'Sei il Campione della Lega Pokémon!', text: `Hai battuto ${nameOf(oppId)} in finale. Titoli vinti: ${save.titles}.`, color: '#e8a317', badge: true };
+    // vinto il torneo: come nei giochi manca l'ultima sfida, il Campione
+    run.championMatch = 'pending';
+    return {
+      title: 'Hai vinto il torneo della Lega!',
+      text: `Hai battuto ${nameOf(oppId)} in finale. Ultimo passo: il Campione Blu ti aspetta all'Altopiano Blu.`,
+      color: '#e8a317',
+    };
   }
   if (!won) {
     return {
@@ -263,6 +331,33 @@ function leagueOutcome(match: Match): MatchBanner {
   }
   const next = opponentOf(run, YOU)!;
   return { title: `Passi in ${ROUND_NAMES[currentRound(run)].toLowerCase()}!`, text: `Prossimo avversario: ${nameOf(next)}.`, color };
+}
+
+/** L'ultima sfida della Lega: battere Blu vuol dire diventare Campione. */
+function championOutcome(match: Match): MatchBanner {
+  const run = save.league!;
+  if (match.winner !== 0) {
+    run.championMatch = 'lost';
+    return {
+      title: 'Blu resta il Campione',
+      text: 'Ci sei andato vicino: allenati e iscriviti a una nuova edizione per riprovarci.',
+      color: '#6aaecb',
+    };
+  }
+  run.championMatch = 'won';
+  save.titles++;
+  return {
+    title: 'Sei il Campione della Lega Pokémon!',
+    text: `Hai battuto Blu. Titoli vinti: ${save.titles}. Il tetto di livello è sparito, si apre la Grotta Ignota e nelle città ti aspettano le rivincite con i capipalestra.`,
+    color: '#e8a317',
+    badge: true,
+  };
+}
+
+function rematchOutcome(gym: Gym, match: Match): MatchBanner {
+  return match.winner === 0
+    ? { title: `Hai vinto la rivincita con ${gym.leader}!`, text: 'Puoi sfidarlo di nuovo quando vuoi: dopo ogni titolo la sua squadra è più forte.', color: gym.color }
+    : { title: `${gym.leader} si prende la rivincita`, text: 'Riprova quando vuoi.', color: gym.color };
 }
 
 showHub();

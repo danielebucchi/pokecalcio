@@ -18,6 +18,29 @@ export interface RouteTrainer {
   levelBonus?: number;
 }
 
+/**
+ * Evento di un luogo, come in Pokémon Giallo: qualcuno ti regala un Pokémon (o te ne fa scegliere
+ * uno), una volta sola. Può servire aver battuto certi allenatori o avere abbastanza medaglie.
+ */
+export interface PlaceEvent {
+  id: string;
+  /** Chi te lo dà, in breve ("La ragazza di Celestopoli"). */
+  title: string;
+  text: string;
+  /** Una specie (regalo) o più (ne scegli una, come i fossili). */
+  species: string[];
+  /** Livelli sotto quello del luogo (default 2). */
+  levelGap?: number;
+  /** Allenatori da battere prima (id). */
+  beat?: string[];
+  /** Medaglie necessarie. */
+  badges?: number;
+  /** Livelli della scorta sopra il luogo, nella sfida (default 2): tarato per vincere ~55-65%. */
+  escortLevels?: number;
+}
+
+export const eventLevel = (loc: KantoLocation, ev: PlaceEvent) => Math.max(5, loc.level - (ev.levelGap ?? 2));
+
 export interface KantoLocation {
   id: string;
   name: string;
@@ -40,7 +63,26 @@ export interface KantoLocation {
   legendary?: { key: string; levelGap: number };
   wild: string[];
   trainers: RouteTrainer[];
+  /** Pokémon regalati una volta sola (vedi PlaceEvent). */
+  events?: PlaceEvent[];
+  /** Si entra solo dopo aver battuto questo allenatore (le sfide con il rivale, vedi RIVAL_STEPS). */
+  requiresTrainer?: string;
+  /** La palestra di questa città riceve solo dopo aver battuto questo allenatore. */
+  gymRequiresTrainer?: string;
 }
+
+/**
+ * Le sfide con il rivale Blu sono tappe fondamentali, come nei giochi: senza batterlo non si
+ * prosegue. `blocks` è la palestra (indice) che non si può raggiungere o sfidare prima: 8 = la Lega.
+ */
+export const RIVAL_STEPS: { trainer: string; location: string; blocks: number; what: string }[] = [
+  { trainer: 'blu-1', location: 'percorso-22', blocks: 0, what: 'Senza batterlo non si va oltre Smeraldopoli.' },
+  { trainer: 'blu-2', location: 'celestopoli', blocks: 2, what: 'Senza batterlo non si esce da Celestopoli.' },
+  { trainer: 'blu-3', location: 'aranciopoli', blocks: 2, what: 'Senza batterlo Lt. Surge non ti riceve.' },
+  { trainer: 'blu-4', location: 'lavandonia', blocks: 4, what: 'Senza batterlo Fucsiapoli resta chiusa.' },
+  { trainer: 'blu-5', location: 'zafferanopoli', blocks: 5, what: 'Senza batterlo Sabrina non ti riceve.' },
+  { trainer: 'blu-6', location: 'percorso-23', blocks: 8, what: 'Senza batterlo la Via Vittoria resta chiusa.' },
+];
 
 const BLU = 'Rivale Blu';
 
@@ -54,7 +96,7 @@ export const KANTO: KantoLocation[] = [
     wild: ['rattata', 'spearow', 'mankey', 'nidoran-f', 'nidoran-m'],
     trainers: [{ id: 'blu-1', name: BLU, team: ['pidgey', 'squirtle', 'rattata'], levelBonus: 1 }],
   },
-  { id: 'percorso-2', name: 'Percorso 2', kind: 'route', x: 200, y: 320, badges: 0, level: 27, wild: ['pidgey', 'rattata', 'caterpie', 'weedle'], trainers: [] },
+  { id: 'percorso-2', name: 'Percorso 2', kind: 'route', x: 200, y: 320, badges: 0, level: 27, requiresTrainer: 'blu-1', wild: ['pidgey', 'rattata', 'caterpie', 'weedle'], trainers: [] },
   {
     id: 'bosco-smeraldo', name: 'Bosco Smeraldo', kind: 'dungeon', x: 200, y: 250, badges: 0, level: 28,
     wild: ['caterpie', 'weedle', 'pikachu'],
@@ -78,6 +120,11 @@ export const KANTO: KantoLocation[] = [
     id: 'monte-luna', name: 'Monte Luna', kind: 'dungeon', x: 430, y: 140, badges: 1, level: 32,
     // Onix non è tra gli starter (è il portiere migliore): si guadagna qui, subito dopo Brock
     wild: ['zubat', 'geodude', 'paras', 'clefairy', 'onix'],
+    events: [{
+      id: 'ev-fossile', title: 'I fossili del Monte Luna',
+      text: 'Battuto il Sapientone, puoi tenere uno dei due fossili: rinasce come Pokémon.',
+      species: ['omanyte', 'kabuto'], beat: ['luna-sapientone'],
+    }],
     trainers: [
       { id: 'luna-rocket', name: 'Recluta Team Rocket', team: ['rattata', 'zubat', 'ekans'] },
       { id: 'luna-sapientone', name: 'Sapientone', team: ['grimer', 'voltorb', 'koffing', 'omanyte', 'kabuto'] },
@@ -86,16 +133,26 @@ export const KANTO: KantoLocation[] = [
   { id: 'percorso-4', name: 'Percorso 4', kind: 'route', x: 540, y: 150, badges: 1, level: 32, wild: ['rattata', 'spearow', 'ekans', 'sandshrew', 'mankey'], trainers: [] },
   {
     id: 'celestopoli', name: 'Celestopoli', kind: 'city', x: 650, y: 160, badges: 1, level: 33, gym: 1, wild: [],
+    events: [{
+      id: 'ev-bulbasaur', title: 'La ragazza di Celestopoli',
+      text: 'Ha in casa un Bulbasaur che non riesce a crescere come vorrebbe: lo affida a chi ha già una medaglia.',
+      species: ['bulbasaur'],
+    }],
     trainers: [{ id: 'blu-2', name: BLU, team: ['pidgey', 'abra', 'rattata', 'squirtle'], levelBonus: 1 }],
   },
   {
-    id: 'ponte-pepita', name: 'Ponte Pepita', kind: 'route', x: 660, y: 60, badges: 1, level: 33,
+    id: 'ponte-pepita', name: 'Ponte Pepita', kind: 'route', x: 660, y: 60, badges: 1, level: 33, requiresTrainer: 'blu-2',
     wild: ['oddish', 'bellsprout', 'venonat', 'abra', 'pidgey'],
+    events: [{
+      id: 'ev-charmander', title: 'Il ragazzo del Ponte Pepita',
+      text: 'Il suo Charmander è stato abbandonato da un allenatore: lo dà a chi batte la recluta del ponte.',
+      species: ['charmander'], beat: ['pepita-rocket'],
+    }],
     trainers: [{ id: 'pepita-rocket', name: 'Recluta Team Rocket', team: ['ekans', 'zubat'] }],
   },
 
   // ── verso Lt. Surge (Lv 38) ──
-  { id: 'percorso-5', name: 'Percorso 5', kind: 'route', x: 650, y: 240, badges: 2, level: 35, wild: ['oddish', 'bellsprout', 'pidgey', 'meowth', 'mankey'], trainers: [] },
+  { id: 'percorso-5', name: 'Percorso 5', kind: 'route', x: 650, y: 240, badges: 2, level: 35, requiresTrainer: 'blu-2', wild: ['oddish', 'bellsprout', 'pidgey', 'meowth', 'mankey'], trainers: [] },
   {
     id: 'percorso-6', name: 'Percorso 6', kind: 'route', x: 650, y: 410, badges: 2, level: 36,
     wild: ['oddish', 'bellsprout', 'pidgey', 'meowth', 'psyduck'],
@@ -105,7 +162,12 @@ export const KANTO: KantoLocation[] = [
     ],
   },
   {
-    id: 'aranciopoli', name: 'Aranciopoli', kind: 'city', x: 650, y: 490, badges: 2, level: 37, gym: 2, wild: ['magikarp', 'shellder', 'krabby'],
+    id: 'aranciopoli', name: 'Aranciopoli', kind: 'city', x: 650, y: 490, badges: 2, level: 37, gymRequiresTrainer: 'blu-3', gym: 2, wild: ['magikarp', 'shellder', 'krabby'],
+    events: [{
+      id: 'ev-squirtle', title: "L'Agente Jenny",
+      text: 'Gli Squirtle del corpo dei vigili del fuoco cercano un allenatore: ne affida uno a chi ha la Medaglia Tuono.',
+      species: ['squirtle'], badges: 3, escortLevels: 10,
+    }],
     trainers: [{ id: 'blu-3', name: `${BLU} (M/N Anna)`, team: ['pidgey', 'abra', 'rattata', 'squirtle'], levelBonus: 1 }],
   },
   {
@@ -117,7 +179,7 @@ export const KANTO: KantoLocation[] = [
 
   // ── verso Erika (Lv 43) ──
   {
-    id: 'percorso-9', name: 'Percorso 9', kind: 'route', x: 780, y: 160, badges: 3, level: 39,
+    id: 'percorso-9', name: 'Percorso 9', kind: 'route', x: 780, y: 160, badges: 3, level: 39, requiresTrainer: 'blu-2',
     wild: ['rattata', 'spearow', 'ekans', 'sandshrew'],
     trainers: [{ id: 'p9-montanaro', name: 'Montanaro', team: ['geodude', 'machop', 'onix'] }],
   },
@@ -141,6 +203,11 @@ export const KANTO: KantoLocation[] = [
   { id: 'percorso-7', name: 'Percorso 7', kind: 'route', x: 540, y: 330, badges: 3, level: 41, wild: ['pidgey', 'oddish', 'bellsprout', 'meowth', 'vulpix', 'growlithe'], trainers: [] },
   {
     id: 'azzurropoli', name: 'Azzurropoli', kind: 'city', x: 430, y: 330, badges: 3, level: 42, gym: 3, wild: [],
+    events: [{
+      id: 'ev-eevee', title: 'Il palazzo di Azzurropoli',
+      text: "All'ultimo piano c'è un Eevee che aspetta qualcuno: è tuo.",
+      species: ['eevee'], escortLevels: 7,
+    }],
     trainers: [{ id: 'covo-rocket', name: 'Recluta Team Rocket (Covo)', team: ['koffing', 'zubat', 'rattata', 'ekans'] }],
   },
 
@@ -162,7 +229,7 @@ export const KANTO: KantoLocation[] = [
     ],
   },
   {
-    id: 'fucsiapoli', name: 'Fucsiapoli', kind: 'city', x: 500, y: 590, badges: 4, level: 47, gym: 4,
+    id: 'fucsiapoli', name: 'Fucsiapoli', kind: 'city', x: 500, y: 590, badges: 4, level: 47, requiresTrainer: 'blu-4', gym: 4,
     // Zona Safari
     wild: ['nidoran-f', 'nidoran-m', 'exeggcute', 'rhyhorn', 'chansey', 'kangaskhan', 'scyther', 'pinsir', 'tauros', 'dratini'],
     trainers: [],
@@ -170,7 +237,19 @@ export const KANTO: KantoLocation[] = [
 
   // ── verso Sabrina (Lv 53) ──
   {
-    id: 'zafferanopoli', name: 'Zafferanopoli', kind: 'city', x: 650, y: 330, badges: 5, level: 51, gym: 5, wild: [],
+    id: 'zafferanopoli', name: 'Zafferanopoli', kind: 'city', x: 650, y: 330, badges: 5, level: 51, gymRequiresTrainer: 'blu-5', gym: 5, wild: [],
+    events: [
+      {
+        id: 'ev-dojo', title: 'Il Dojo Karate',
+        text: 'Battuto il maestro, puoi portare via uno dei suoi due campioni.',
+        species: ['hitmonlee', 'hitmonchan'], beat: ['dojo-karateka'], escortLevels: 8,
+      },
+      {
+        id: 'ev-lapras', title: 'La Silph SpA',
+        text: 'Liberata la Silph dal Team Rocket, un dipendente ti ringrazia con un Lapras.',
+        species: ['lapras'], beat: ['silph-scienziato', 'blu-5'], levelGap: 4, escortLevels: 5,
+      },
+    ],
     trainers: [
       { id: 'dojo-karateka', name: 'Karateka (Dojo)', team: ['hitmonlee', 'hitmonchan', 'machop', 'mankey'] },
       { id: 'silph-scienziato', name: 'Scienziato (Silph SpA)', team: ['magnemite', 'voltorb', 'porygon'] },
@@ -215,7 +294,7 @@ export const KANTO: KantoLocation[] = [
     trainers: [{ id: 'blu-6', name: `${BLU} (Percorso 22)`, team: ['pidgey', 'growlithe', 'exeggcute', 'abra', 'squirtle', 'rhyhorn'], levelBonus: 1 }],
   },
   {
-    id: 'via-vittoria', name: 'Via Vittoria', kind: 'dungeon', x: 70, y: 180, badges: 8, level: 65, legendary: { key: 'moltres', levelGap: 0 },
+    id: 'via-vittoria', name: 'Via Vittoria', kind: 'dungeon', x: 70, y: 180, badges: 8, level: 65, requiresTrainer: 'blu-6', legendary: { key: 'moltres', levelGap: 0 },
     wild: ['machop', 'geodude', 'onix', 'zubat', 'cubone'],
     trainers: [
       { id: 'vittoria-fantallenatore', name: 'Fantallenatore', team: ['dratini', 'rhyhorn', 'exeggcute'] },

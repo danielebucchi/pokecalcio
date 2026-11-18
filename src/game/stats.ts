@@ -1,3 +1,4 @@
+import type { TechniqueId } from './techniques';
 import type { BaseStats, Species } from '../data/pokedex';
 
 export type Role = 'POR' | 'DIF' | 'CEN' | 'ATT';
@@ -11,6 +12,10 @@ export interface PokemonInstance {
   ivs: BaseStats;
   /** Allenamento specifico (max 252 per stat, 510 totali), come nei giochi. */
   evs: BaseStats;
+  /** Tecnica imparata con una medaglia (vedi techniques.ts), per sempre. */
+  technique?: TechniqueId;
+  /** Soprannome dato dall'allenatore (vuoto = nome della specie). */
+  nickname?: string;
 }
 
 /** Le 4 statistiche del gioco: tra fisico e speciale si prende il valore più alto. */

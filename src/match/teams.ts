@@ -1,11 +1,12 @@
 import { FORMATIONS, type FormationKey } from '../game/formations';
 import { POKEDEX, bst, type BaseStats, type PokeType } from '../data/pokedex';
 import type { Gym } from '../game/gyms';
-import { locationById, neighbors, trainerLevel, type KantoLocation, type RouteTrainer } from '../game/kanto';
+import { eventLevel, locationById, neighbors, trainerLevel, type KantoLocation, type PlaceEvent, type RouteTrainer } from '../game/kanto';
 import type { LeagueTrainer } from '../game/league';
 import { benchOf, findOwned, ratingsOf, type SaveData } from '../game/save';
 import { createInstance, type PokemonInstance, type Role } from '../game/stats';
 import { typeMultiplier } from '../game/typechart';
+import { badgeBonus } from '../game/techniques';
 import { Match, type TeamSetup } from './engine';
 
 function teamFrom(
@@ -38,7 +39,8 @@ export function buildDemoTeams(): [TeamSetup, TeamSetup] {
 /** La squadra del giocatore, dalla formazione salvata (va validata prima con lineupProblem). */
 export function clubTeam(save: SaveData): TeamSetup {
   const insts = save.lineup.map((uid) => findOwned(save, uid)!);
-  return teamFrom(save.clubName, save.color, true, save.formation, insts, benchOf(save));
+  // i bonus delle medaglie (Sasso, Tuono, Anima, Vulcano) valgono per tutta la tua squadra
+  return { ...teamFrom(save.clubName, save.color, true, save.formation, insts, benchOf(save)), bonus: badgeBonus(save.badges) };
 }
 
 /** Distribuisce a caso un budget di EV, come farebbe un allenatore avversario. */
@@ -180,7 +182,21 @@ export const buildGymTeam = (gym: Gym, scout?: TeamSetup) =>
 /** Livello della squadra del capopalestra (qualcuno sta un po' sopra il livello nominale della palestra). */
 export const gymLevel = (gym: Gym) => gym.level + (gym.extraLevels ?? 0);
 
-export const buildLeagueTeam = (t: LeagueTrainer, scout?: TeamSetup) => buildEliteTeam({ ...t, name: t.name }, scout);
+/** Livelli in più degli allenatori della Lega (tarato con `npm run career`: la si vince in qualche edizione). */
+export const LEAGUE_EXTRA = { levels: 0 };
+/** Dopo ogni titolo Lega, Campione e rivincite salgono di 2 livelli (fino a +10). */
+export const postGameLevels = (titles: number) => 2 * Math.min(titles, 5);
+export const buildLeagueTeam = (t: LeagueTrainer, scout?: TeamSetup, extra = 0) =>
+  buildEliteTeam({ ...t, name: t.name, level: t.level + LEAGUE_EXTRA.levels + extra }, scout);
+
+/** Il Campione Blu, ultima sfida della Lega: la sua squadra della Lega, 4 livelli più in alto. */
+export const buildChampionTeam = (blu: LeagueTrainer, scout?: TeamSetup, extra = 0) =>
+  buildEliteTeam({ ...blu, name: `${blu.name}, Campione`, level: blu.level + LEAGUE_EXTRA.levels + 4 + extra }, scout);
+
+/** Rivincita con un capopalestra dopo il titolo: squadra evoluta e allenata al massimo, dal livello 68. */
+export const REMATCH_LEVEL = 68;
+export const buildRematchTeam = (gym: Gym, scout?: TeamSetup, extra = 0) =>
+  buildEliteTeam({ ...gym, name: `${gym.leader} · rivincita`, level: REMATCH_LEVEL + extra, training: 1, evolved: true }, scout);
 
 /** Partita giocata senza grafica (le altre del tabellone della Lega): restituisce il vincitore. */
 export function simulateMatch(a: TeamSetup, b: TeamSetup, knockout: boolean): Match {
@@ -243,6 +259,23 @@ export function buildLegendaryTeam(loc: KantoLocation): TeamSetup {
   const { lineup } = bestLineup([boss, ...others], formation);
   // niente panchina: il leggendario e la sua scorta giocano tutta la partita senza cambi
   return teamFrom(`${POKEDEX[leg.key].name} e i selvatici di ${loc.name}`, '#e8a317', false, formation, lineup, []);
+}
+
+/** Taratura delle sfide degli eventi (`npm run career` / prove a parte): circa 55-65% di vittorie. */
+export const EVENT = { escortLevels: 2 };
+
+/**
+ * Sfida di un evento: il Pokémon in palio (al livello dell'evento) gioca con 4 selvatici del luogo,
+ * allenati come un allenatore del percorso, senza panchina. Se vinci chiede di unirsi a te.
+ */
+export function buildEventTeam(loc: KantoLocation, ev: PlaceEvent, species: string): TeamSetup {
+  const star = createInstance(species, eventLevel(loc, ev));
+  star.ivs = { hp: 31, atk: 31, def: 31, spa: 31, spd: 31, spe: 31 };
+  const wild = localWild(loc);
+  // la scorta è forte come un allenatore del percorso (EVENT.escortLevels sopra il luogo, allenata al massimo)
+  const others = Array.from({ length: 4 }, () => trainedInstance(wild[Math.floor(Math.random() * wild.length)], loc.level + (ev.escortLevels ?? EVENT.escortLevels)));
+  const { lineup } = bestLineup([star, ...others], 'rombo');
+  return teamFrom(`${POKEDEX[species].name} · ${ev.title}`, '#e8a317', false, 'rombo', lineup, []);
 }
 
 /**

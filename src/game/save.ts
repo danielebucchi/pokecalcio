@@ -1,6 +1,8 @@
 import { POKEDEX } from '../data/pokedex';
 import { FORMATIONS, type FormationKey } from './formations';
-import { KANTO } from './kanto';
+import { registerCaught, type Dex } from './dex';
+import { TECHNIQUES, type TechniqueId } from './techniques';
+import { KANTO, RIVAL_STEPS, type KantoLocation, type PlaceEvent, type RouteTrainer } from './kanto';
 import type { LeagueRun } from './league';
 import { createInstance, gameStats, realStats, roleRatings, type PokemonInstance } from './stats';
 
@@ -8,6 +10,26 @@ import { createInstance, gameStats, realStats, roleRatings, type PokemonInstance
 export interface OwnedPokemon extends PokemonInstance {
   /** Esperienza accumulata verso il prossimo livello. */
   exp: number;
+  /** Statistiche di tutta la carriera con te. */
+  career?: CareerStats;
+}
+
+export interface CareerStats {
+  matches: number;
+  goals: number;
+  assists: number;
+  saves: number;
+}
+
+/** Una partita importante, per lo storico (non le partitelle). */
+export interface HistoryEntry {
+  matchday: number;
+  /** Cosa era: "Palestra di Brock", "Rivale Blu", "Lega · Finale"… */
+  title: string;
+  /** Gol tuoi e loro (e i rigori, se ci sono stati). */
+  score: [number, number];
+  penalties?: [number, number];
+  won: boolean;
 }
 
 export interface SaveData {
@@ -22,8 +44,6 @@ export interface SaveData {
   bench: string[];
   /** Sessioni di allenamento EV (ATT/DIF/VEL/PV): 3 per ogni luogo nuovo, quelle non usate restano. */
   sessionsLeft: number;
-  /** Sparring (esperienza): si ricaricano dopo ogni partita, di più se vinci. */
-  sparringLeft: number;
   /** Luoghi che ti hanno già dato le loro sessioni di allenamento (una volta sola ciascuno). */
   trainedAt: string[];
   /** Partite giocate + 1 (palestre e percorso). */
@@ -40,12 +60,28 @@ export interface SaveData {
   defeated: string[];
   /** Leggendari che si sono già uniti (spariscono dal loro luogo). */
   legendaries: string[];
+  /** Eventi dei luoghi già ritirati (Pokémon regalati: una volta sola). */
+  events: string[];
+  /** Premi delle missioni facoltative già ritirati (id della missione). */
+  rewards: string[];
+  /** Tecniche delle medaglie già insegnate: come le MT di Rosso/Blu si usano una volta sola. */
+  techniquesUsed: TechniqueId[];
+  /** Pokédex: specie viste e prese. */
+  dex: Dex;
+  /** Partite importanti, dalla più recente (al massimo HISTORY_MAX). */
+  history: HistoryEntry[];
   record: { w: number; d: number; l: number; gf: number; ga: number };
 }
 
 const KEY = 'pokecalcio-save';
-/** Sparring dopo una partita: l'esperienza si può sempre grindare, fino al tetto di livello. */
-export const SPARRING_PER_MATCH = { w: 3, d: 2, l: 1 } as const;
+
+export const HISTORY_MAX = 40;
+
+/** Aggiunge una partita importante allo storico (la più recente in cima). */
+export function recordHistory(save: SaveData, entry: HistoryEntry) {
+  save.history.unshift(entry);
+  save.history.length = Math.min(save.history.length, HISTORY_MAX);
+}
 
 /** Sessioni di allenamento che ricevi arrivando per la prima volta in un luogo. */
 export const SESSIONS_PER_PLACE = 3;
@@ -64,21 +100,23 @@ export function arriveAt(save: SaveData, id: string): number {
  * La prima squadra si sceglie per ruoli, come in un draft: 1 portiere su 5, 2 difensori su 8 e
  * 2 attaccanti su 8. Si parte al livello 30 e si evolve subito in partita, quindi conta la forma
  * più evoluta raggiungibile entro il tetto di Brock (32): tutte nella stessa fascia (somma delle
- * statistiche ~345-425). Fuori chi diventa troppo forte (Bulbasaur → Venusaur al 32, Tentacool →
- * Tentacruel, Drowzee → Hypno, Krabby → Kingler, Magikarp → Gyarados) e chi è fuori scala nel ruolo
- * (Onix portiere, Abra/Kadabra in attacco).
+ * statistiche ~370-425), da tutte le generazioni. Fuori chi diventa troppo forte (Bulbasaur →
+ * Venusaur al 32, Tentacool → Tentacruel, Shinx → Luxray, Mareep → Ampharos, Magikarp → Gyarados),
+ * chi è fuori scala nel ruolo (Onix portiere, Abra/Kadabra e Gastly in attacco), chi resta troppo
+ * debole (Pikachu evolve solo al 38) e gli pseudo-leggendari (Dratini, Bagon, Gible…), che più
+ * avanti diventano mostri da 600.
  * La squadra va in campo nel Quadrato (2-2), che è proprio portiere, 2 difensori e 2 attaccanti.
  */
 export const STARTER_GROUPS = [
-  { role: 'POR', label: 'Portiere', count: 1, pool: ['geodude', 'cubone', 'lickitung', 'poliwag', 'rhyhorn'] },
-  { role: 'DIF', label: 'Difensori', count: 2, pool: ['squirtle', 'oddish', 'machop', 'paras', 'kabuto', 'koffing', 'exeggcute', 'shellder'] },
-  { role: 'ATT', label: 'Attaccanti', count: 2, pool: ['charmander', 'pikachu', 'gastly', 'dratini', 'diglett', 'rattata', 'ponyta', 'weedle'] },
+  { role: 'POR', label: 'Portiere', count: 1, pool: ['geodude', 'chespin', 'wailmer', 'timburr', 'tinkatink'] },
+  { role: 'DIF', label: 'Difensori', count: 2, pool: ['squirtle', 'snivy', 'mudkip', 'roggenrola', 'flabebe', 'poochyena', 'spheal', 'grubbin'] },
+  { role: 'ATT', label: 'Attaccanti', count: 2, pool: ['charmander', 'froakie', 'treecko', 'scorbunny', 'diglett', 'murkrow', 'woobat', 'rattata'] },
 ] as const;
 export const STARTER_POOL: string[] = STARTER_GROUPS.flatMap((g) => [...g.pool]);
 export const STARTER_COUNT = 5;
 export const STARTER_LEVEL = 30;
 /** Squadra usata dalle simulazioni: portiere, 2 difensori, 2 attaccanti (in quest'ordine). */
-export const DEFAULT_STARTERS = ['geodude', 'squirtle', 'oddish', 'gastly', 'diglett'];
+export const DEFAULT_STARTERS = ['geodude', 'squirtle', 'snivy', 'treecko', 'diglett'];
 
 /** Nuova carriera senza squadra: la si sceglie con chooseStarters (schermata iniziale). */
 export function newSave(): SaveData {
@@ -92,7 +130,6 @@ export function newSave(): SaveData {
     lineup: [],
     bench: [],
     sessionsLeft: SESSIONS_PER_PLACE,
-    sparringLeft: SPARRING_PER_MATCH.w,
     matchday: 1,
     badges: 0,
     league: null,
@@ -102,6 +139,11 @@ export function newSave(): SaveData {
     trainedAt: ['biancavilla'],
     defeated: [],
     legendaries: [],
+    events: [],
+    rewards: [],
+    techniquesUsed: [],
+    dex: { seen: [], caught: [] },
+    history: [],
     record: { w: 0, d: 0, l: 0, gf: 0, ga: 0 },
   };
 }
@@ -121,6 +163,7 @@ export function chooseStarters(save: SaveData, keys: string[]) {
   }
   if (keys.length !== STARTER_COUNT) throw new Error('Scegli 5 Pokémon');
   save.roster = keys.map((key) => ({ ...createInstance(key, STARTER_LEVEL), exp: 0 }));
+  for (const k of keys) registerCaught(save, k);
   save.formation = 'quadrato';
   save.lineup = save.roster.map((p) => p.uid);
   save.bench = autoBench(save);
@@ -137,9 +180,18 @@ export function loadSave(): SaveData {
         data.league ??= null;
         data.titles ??= 0;
         data.legendaries ??= [];
+        data.events ??= [];
+        data.rewards ??= [];
+        data.techniquesUsed ??= [];
+        // il Pokédex parte dalla rosa attuale
+        data.history ??= [];
+        // carriere di prima del Campione Blu: chi aveva già vinto la Lega l'ha battuto
+        if (data.league?.champion === 'you' && !data.league.championMatch) data.league.championMatch = data.titles ? 'won' : 'pending';
+        data.dex ??= { seen: data.roster.map((p) => p.speciesKey), caught: data.roster.map((p) => p.speciesKey) };
+        // carriere di prima che il rivale diventasse obbligatorio: le sfide già "superate" contano come vinte
+        for (const r of RIVAL_STEPS) if (data.badges > r.blocks && !data.defeated?.includes(r.trainer)) data.defeated?.push(r.trainer);
         // prima l'allenamento si ricaricava a ogni partita: i luoghi già visitati contano come usati
         data.trainedAt ??= [...(data.visited ?? [])];
-        data.sparringLeft ??= SPARRING_PER_MATCH.w;
         // prima in panchina andava tutta la rosa: si portano i 4 migliori
         data.bench ??= autoBench(data);
         // carriere di prima della mappa: si riparte dalla città dell'ultima medaglia
@@ -233,9 +285,41 @@ export function addToRoster(save: SaveData, inst: PokemonInstance, releaseUid?: 
   if (releaseUid) releasePokemon(save, releaseUid);
   if (save.roster.length >= ROSTER_MAX || save.roster.some((p) => p.uid === inst.uid)) return false;
   save.roster.push({ ...inst, exp: 0 });
+  registerCaught(save, inst.speciesKey);
   save.bench = benchOf(save).map((p) => p.uid);
   if (save.bench.length < BENCH_MAX) save.bench.push(inst.uid);
   return true;
+}
+
+/** Tecniche delle medaglie vinte e ancora da insegnare. */
+export const techniquesAvailable = (save: SaveData) =>
+  TECHNIQUES.filter((t) => t.badge < save.badges && !save.techniquesUsed.includes(t.id));
+
+/** Insegna una tecnica a un Pokémon della rosa: per sempre, e il Pokémon ne impara una sola. */
+export function teachTechnique(save: SaveData, id: TechniqueId, uid: string): boolean {
+  const p = findOwned(save, uid);
+  if (!p || p.technique || !techniquesAvailable(save).some((t) => t.id === id)) return false;
+  p.technique = id;
+  save.techniquesUsed.push(id);
+  return true;
+}
+
+/** Allenatore (di qualunque luogo) per id. */
+export const trainerById = (id: string): RouteTrainer | undefined => KANTO.flatMap((l) => l.trainers).find((t) => t.id === id);
+
+/** Rivale ancora da battere che chiude questo luogo (o la sua palestra, con `gym`), oppure null. */
+export function rivalGate(save: SaveData, l: KantoLocation, gym = false): RouteTrainer | null {
+  const id = gym ? l.gymRequiresTrainer : l.requiresTrainer;
+  return id && !save.defeated.includes(id) ? (trainerById(id) ?? null) : null;
+}
+
+/** Stato di un evento: già ritirato, pronto, oppure cosa manca. */
+export function eventState(save: SaveData, ev: PlaceEvent): { done: true } | { done: false; missing: string | null } {
+  if (save.events.includes(ev.id)) return { done: true };
+  if (ev.badges && save.badges < ev.badges) return { done: false, missing: `Serve${ev.badges === 1 ? '' : 'no'} ${ev.badges} ${ev.badges === 1 ? 'medaglia' : 'medaglie'}` };
+  const left = (ev.beat ?? []).filter((id) => !save.defeated.includes(id));
+  if (left.length) return { done: false, missing: `Prima batti ${left.length === 1 ? "l'allenatore" : 'gli allenatori'} di questo luogo` };
+  return { done: false, missing: null };
 }
 
 /** Formazione migliore per il modulo: prova tutte le combinazioni (la rosa è piccola). */

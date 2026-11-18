@@ -385,14 +385,19 @@ export interface LeagueRun {
   /** Turno in cui sei uscito, o null. */
   eliminatedIn: number | null;
   champion: string | null;
+  /** Vinto il torneo, l'ultima sfida è contro il Campione Blu: da giocare, vinta o persa. */
+  championMatch?: 'pending' | 'won' | 'lost';
 }
+
+/** Il Campione in carica (Blu, come in Rosso/Blu): non è nel tabellone, lo affronta chi vince il torneo. */
+export const CHAMPION_ID = 'blu';
 
 export const trainerById = (id: string) => LEAGUE.find((t) => t.id === id);
 
 export function newLeagueRun(edition: number): LeagueRun {
   const shuffle = (ids: string[]) => ids.map((id) => [Math.random(), id] as const).sort((a, b) => a[0] - b[0]).map(([, id]) => id);
   // 7 allenatori sorteggiati dalla rosa, poi il tabellone
-  const field = shuffle([YOU, ...shuffle(LEAGUE.map((t) => t.id)).slice(0, LEAGUE_FIELD)]);
+  const field = shuffle([YOU, ...shuffle(LEAGUE.filter((t) => t.id !== CHAMPION_ID).map((t) => t.id)).slice(0, LEAGUE_FIELD)]);
   return { edition, rounds: [field], results: [], eliminatedIn: null, champion: null };
 }
 
