@@ -1,5 +1,5 @@
 import { POKEDEX } from '../data/pokedex';
-import { spriteFor } from '../ui/sprites';
+import { spriteFor, whiteSprite } from '../ui/sprites';
 import { currentTheme } from '../ui/theme';
 import {
   BOX_DEPTH, BOX_HALF, CY, FIELD_H, FIELD_W, GOAL_HALF, PENALTY_DIST, SIM_PER_MINUTE,
@@ -32,8 +32,17 @@ const FONT_BODY = "'Manrope', system-ui, sans-serif";
 const LAND_W = FIELD_W * S + 2 * M;
 const LAND_H = FIELD_H * S + 2 * M;
 
+/** Durata dell'animazione dell'evoluzione, in millisecondi reali (non dipende dalla velocità). */
+const EVO_ANIM_MS = 1100;
+/** Prima parte: sagoma bianca che alterna vecchia e nuova forma, sempre più veloce. */
+const EVO_FLICKER_MS = 700;
+
 export class Renderer {
   private ctx: CanvasRenderingContext2D;
+  /** Evoluzioni in corso di animazione: forma di partenza e istante (tempo reale). */
+  private evoAnims = new Map<number, { from: string; start: number }>();
+  /** Ultimo stadio visto per giocatore: se sale, è un'evoluzione (un cambio lo riporta a 0). */
+  private lastStage = new Map<number, { stage: number; form: string }>();
   private t: Palette = PALETTES.light;
   readonly width: number;
   readonly height: number;
@@ -228,7 +237,49 @@ export class Renderer {
     const sp = POKEDEX[p.formKey];
     const img = spriteFor(sp.dex);
     const size = 76 + p.stage * 10;
-    if (img) {
+    // evoluzione appena avvenuta: parte l'animazione (lo stadio sale; un cambio lo riporta a 0)
+    const now = performance.now();
+    const seen = this.lastStage.get(p.id);
+    if (seen && p.stage > seen.stage) this.evoAnims.set(p.id, { from: seen.form, start: now });
+    this.lastStage.set(p.id, { stage: p.stage, form: p.formKey });
+    const anim = this.evoAnims.get(p.id);
+    const t = anim ? now - anim.start : Infinity;
+    if (anim && t >= EVO_ANIM_MS) this.evoAnims.delete(p.id);
+    if (img && anim && t < EVO_ANIM_MS) {
+      c.save();
+      c.translate(x, y - 6);
+      if (p.team === 0) c.scale(-1, 1);
+      if (t < EVO_FLICKER_MS) {
+        // come nei giochi: sagoma bianca che alterna vecchia e nuova forma, sempre più in fretta
+        const ph = t / EVO_FLICKER_MS;
+        const showNew = Math.floor(ph * ph * 16) % 2 === 1;
+        const key = showNew ? p.formKey : anim.from;
+        const s = (showNew ? size : 76 + Math.max(0, p.stage - 1) * 10) * (1 + 0.06 * Math.sin(t / 40));
+        const white = whiteSprite(POKEDEX[key].dex);
+        if (white) c.drawImage(white, -s / 2, -s / 2, s, s);
+      } else {
+        // la nuova forma emerge dal bianco
+        c.drawImage(img, -size / 2, -size / 2, size, size);
+        const white = whiteSprite(sp.dex);
+        if (white) {
+          c.globalAlpha = 1 - (t - EVO_FLICKER_MS) / (EVO_ANIM_MS - EVO_FLICKER_MS);
+          c.drawImage(white, -size / 2, -size / 2, size, size);
+        }
+      }
+      c.restore();
+      // scintille intorno
+      c.save();
+      c.globalAlpha = Math.max(0, 1 - t / EVO_ANIM_MS);
+      c.fillStyle = '#fff4a8';
+      for (let i = 0; i < 6; i++) {
+        const a = (i / 6) * Math.PI * 2 + t / 260;
+        const r = 26 + (t / EVO_ANIM_MS) * 16;
+        c.beginPath();
+        c.arc(x + Math.cos(a) * r, y - 6 + Math.sin(a) * r, 2.6, 0, Math.PI * 2);
+        c.fill();
+      }
+      c.restore();
+    } else if (img) {
       c.save();
       c.translate(x, y - 6);
       if (p.team === 0) c.scale(-1, 1); // gli sprite guardano a sinistra

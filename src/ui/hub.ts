@@ -13,7 +13,7 @@ import {
   applyDrill, currentStats, drillBlock, drillPreview, drillStat, expToNext, suggestedDrill, type Drill,
 } from '../game/progression';
 import {
-  BENCH_MAX, ROSTER_MAX, SESSIONS_PER_PLACE, autoBench, autoLineup, benchOf, bestRating, bestRole, eventState, releasable, releasePokemon, rivalGate, teachTechnique, techniquesAvailable, trainerById as routeTrainer, findOwned, lineupProblem, ratingsOf,
+  BENCH_MAX, ROSTER_MAX, SESSIONS_PER_PLACE, autoBench, autoLineup, benchOf, bestRating, bestRole, eventState, exportSave, releasable, releasePokemon, rivalGate, teachTechnique, techniquesAvailable, trainerById as routeTrainer, findOwned, lineupProblem, ratingsOf,
   type OwnedPokemon, type SaveData,
 } from '../game/save';
 import type { PokemonInstance, Role } from '../game/stats';
@@ -61,6 +61,11 @@ export interface HubState {
   teaching?: string | null;
   /** Pokémon a cui stai dando un soprannome (uid). */
   renaming?: string | null;
+  /** Pannello esporta/importa salvataggio aperto. */
+  savePanel?: 'export' | 'import' | null;
+  importCode?: string;
+  importConfirm?: boolean;
+  importError?: string | null;
 }
 
 export interface HubActions {
@@ -73,6 +78,8 @@ export interface HubActions {
   /** Nuova edizione della Lega, con nuovo sorteggio. */
   joinLeague(): void;
   reset(): void;
+  /** Importa un codice di salvataggio: null se è andato bene, altrimenti il motivo. */
+  importSave(code: string): string | null;
 }
 
 const WELCOME_KEY = 'pokecalcio-welcome-seen';
@@ -148,6 +155,9 @@ export function renderHub(app: HTMLElement, save: SaveData, ch: Challenges, stat
     <nav class="tabs">${tabs.map(([k, l, extra]) => `<button data-tab="${k}" class="${state.tab === k ? 'on' : ''}">${l}${extra}</button>`).join('')}</nav>
     <main id="tab"></main>
     <footer class="hub-foot">
+      ${savePanelHtml(save, state)}
+      <button class="link" data-save-panel="export">Esporta salvataggio</button>
+      <button class="link" data-save-panel="import">Importa salvataggio</button>
       <button id="reset" class="link">Ricomincia la carriera da zero</button>
     </footer>`;
 
@@ -173,6 +183,45 @@ export function renderHub(app: HTMLElement, save: SaveData, ch: Challenges, stat
   document.getElementById('welcome-ok')?.addEventListener('click', () => {
     localStorage.setItem(WELCOME_KEY, '1');
     renderHub(app, save, ch, state, actions);
+  });
+  // esporta / importa: un pannello sopra i link in fondo
+  app.querySelectorAll<HTMLButtonElement>('[data-save-panel]').forEach((b) => {
+    b.onclick = () => {
+      const which = b.dataset.savePanel as 'export' | 'import';
+      state.savePanel = state.savePanel === which ? null : which;
+      state.importError = null;
+      state.importConfirm = false;
+      renderHub(app, save, ch, state, actions);
+      app.querySelector('.save-panel')?.scrollIntoView({ block: 'center' });
+    };
+  });
+  app.querySelector<HTMLButtonElement>('[data-copy-save]')?.addEventListener('click', async (e) => {
+    const btn = e.currentTarget as HTMLButtonElement;
+    const area = app.querySelector<HTMLTextAreaElement>('.save-panel textarea')!;
+    try {
+      await navigator.clipboard.writeText(area.value);
+      btn.textContent = 'Copiato ✓';
+    } catch {
+      // niente permesso per gli appunti (http sul telefono): si seleziona e si copia a mano
+      area.select();
+      btn.textContent = 'Selezionato: copia a mano';
+    }
+  });
+  app.querySelector<HTMLButtonElement>('[data-import-save]')?.addEventListener('click', () => {
+    const code = app.querySelector<HTMLTextAreaElement>('.save-panel textarea')!.value;
+    state.importCode = code;
+    if (!state.importConfirm) {
+      state.importConfirm = true;
+      state.importError = null;
+      renderHub(app, save, ch, state, actions);
+      return;
+    }
+    const err = actions.importSave(code);
+    if (err) {
+      state.importError = err;
+      state.importConfirm = false;
+      renderHub(app, save, ch, state, actions);
+    }
   });
   document.getElementById('reset')!.onclick = () => {
     if (confirm('Cancellare la carriera (rosa, livelli, risultati) e ripartire da zero?')) actions.reset();
@@ -313,6 +362,28 @@ function renderMissions(main: HTMLElement, save: SaveData, state: HubState, acti
   });
 }
 
+/** Pannello per esportare o importare la carriera con un codice. */
+function savePanelHtml(save: SaveData, state: HubState): string {
+  if (state.savePanel === 'export') {
+    return `<section class="card save-panel">
+      <h3>Esporta salvataggio</h3>
+      <p class="muted">Copia questo codice e incollalo in «Importa salvataggio» sull'altro dispositivo (o tienilo da parte come copia di sicurezza).</p>
+      <textarea readonly rows="4">${esc(exportSave(save))}</textarea>
+      <button class="primary" data-copy-save>Copia il codice</button>
+    </section>`;
+  }
+  if (state.savePanel === 'import') {
+    return `<section class="card save-panel">
+      <h3>Importa salvataggio</h3>
+      <p class="muted">Incolla il codice esportato da un altro dispositivo. <b>Sostituisce la carriera attuale</b>: se vuoi tenerla, esportala prima.</p>
+      <textarea rows="4" placeholder="PKC1.…">${esc(state.importCode ?? '')}</textarea>
+      ${state.importError ? `<p class="toast warn">${esc(state.importError)}</p>` : ''}
+      <button class="${state.importConfirm ? 'danger' : 'primary'}" data-import-save>${state.importConfirm ? 'Sicuro? Sostituisce la carriera attuale' : 'Importa'}</button>
+    </section>`;
+  }
+  return '';
+}
+
 /** Testata: dove sei e il prossimo obiettivo, con il bottone giusto per il luogo in cui ti trovi. */
 function headerGoal(save: SaveData, ch: Challenges, problem: string | null): string {
   const here = `Sei a ${esc(ch.location.name)}`;
@@ -405,6 +476,7 @@ function renderSquad(main: HTMLElement, save: SaveData, state: HubState, actions
     .join('');
 
   main.innerHTML = `
+    ${state.message ? `<div class="toast">${esc(state.message)}</div>` : ''}
     <div class="squad">
       <div>
         <div class="pitch-mini">${pitch}</div>

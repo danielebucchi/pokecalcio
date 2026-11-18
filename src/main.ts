@@ -8,7 +8,7 @@ import {
 import { awardMatch } from './game/progression';
 import { registerMatch } from './game/dex';
 import { recruitOffers, type RecruitOffer } from './game/recruit';
-import { ROSTER_MAX, addToRoster, arriveAt, recordHistory, chooseStarters, lineupProblem, rivalGate, loadSave, newSave, releasable, storeSave, type SaveData } from './game/save';
+import { ROSTER_MAX, addToRoster, arriveAt, recordHistory, chooseStarters, importSave, lineupProblem, rivalGate, loadSave, newSave, releasable, storeSave, type SaveData } from './game/save';
 import type { Match, TeamSetup } from './match/engine';
 import {
   buildChampionTeam, buildEventTeam, buildGymTeam, buildRematchTeam, postGameLevels, buildLeagueTeam, buildLegendaryTeam, buildTrainerTeam, buildWildTeam, clubTeam, simulateMatch,
@@ -120,6 +120,21 @@ function showHub() {
       storeSave(save);
       hub.tab = 'map';
       showHub();
+    },
+    importSave(code) {
+      const err = importSave(code);
+      if (err) return err;
+      // ricarica con gli aggiornamenti dei salvataggi vecchi
+      save = loadSave();
+      cache.clear();
+      hub.tab = 'squad';
+      hub.message = 'Carriera importata ✓';
+      hub.savePanel = null;
+      hub.importCode = '';
+      hub.importConfirm = false;
+      hub.slot = 0;
+      showHub();
+      return null;
     },
     reset() {
       save = newSave();

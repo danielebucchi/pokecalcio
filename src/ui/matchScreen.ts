@@ -7,6 +7,7 @@ import { Match, MAX_SUBS, SIM_PER_MINUTE, formName, isActive, type MatchEvent, t
 import { Renderer } from '../match/renderer';
 import { esc } from './common';
 import { spriteUrl } from './sprites';
+import { musicEnabled, playSfx, setMusic, setSfx, sfxEnabled, startMusic, stopMusic, type Sfx } from './sound';
 import { bindThemeToggle, themeToggleHtml } from './theme';
 
 const AUTO_EVO_KEY = 'pokecalcio-autoevo';
@@ -108,6 +109,8 @@ export function runMatch(app: HTMLElement, teams: [TeamSetup, TeamSetup], cb: Ma
           <input type="checkbox" id="autoevo"> <span class="lbl-long">Evoluzione automatica</span><span class="lbl-short">Auto-evo</span>
         </label>
         <span class="hint"><kbd>Spazio</kbd> pausa · <kbd>1</kbd>–<kbd>5</kbd> evolvi</span>
+        <button id="sfx" class="icon-btn ${sfxEnabled() ? 'on' : ''}" title="Effetti sonori">🔊</button>
+        <button id="music" class="icon-btn ${musicEnabled() ? 'on' : ''}" title="Musica">🎵</button>
         <button id="quit" title="La partita non verrà conteggiata">Abbandona</button>
       </div>
       <div class="arena">
@@ -132,7 +135,38 @@ export function runMatch(app: HTMLElement, teams: [TeamSetup, TeamSetup], cb: Ma
     logEl.prepend(li);
   };
   match.events.forEach(addLog);
-  match.onEvent = addLog;
+  // suoni: ogni evento nuovo della cronaca ha il suo
+  const soundFor = (e: MatchEvent): Sfx | null => {
+    if (e.kind === 'goal') return e.team === humanTeam ? 'goal' : 'goalAgainst';
+    if (e.kind === 'save') return 'save';
+    if (e.kind === 'ko') return 'ko';
+    if (e.kind === 'evo') return 'evo';
+    if (e.kind === 'sub') return 'sub';
+    if (e.kind === 'setpiece') return 'setpiece';
+    if (e.kind === 'info') {
+      if (e.text.startsWith("Calcio d'inizio")) return 'kickoff';
+      if (e.text.startsWith('Intervallo')) return 'halftime';
+      if (e.text.startsWith('Fischio finale')) return 'fulltime';
+    }
+    return null;
+  };
+  match.onEvent = (e) => {
+    addLog(e);
+    const s = soundFor(e);
+    if (s) playSfx(s);
+  };
+  playSfx('kickoff');
+  startMusic();
+  const sfxBtn = document.getElementById('sfx')!;
+  sfxBtn.onclick = () => {
+    setSfx(!sfxEnabled());
+    sfxBtn.classList.toggle('on', sfxEnabled());
+  };
+  const musicBtn = document.getElementById('music')!;
+  musicBtn.onclick = () => {
+    setMusic(!musicEnabled());
+    musicBtn.classList.toggle('on', musicEnabled());
+  };
 
   // carte dei Pokémon controllati
   const bench = document.getElementById('bench')!;
@@ -348,6 +382,7 @@ export function runMatch(app: HTMLElement, teams: [TeamSetup, TeamSetup], cb: Ma
   const cleanup = () => {
     cancelAnimationFrame(raf);
     window.removeEventListener('keydown', onKey);
+    stopMusic();
   };
   raf = requestAnimationFrame(frame);
   return cleanup;
