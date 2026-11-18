@@ -1,5 +1,5 @@
 import { POKEDEX, TYPE_NAMES } from '../data/pokedex';
-import type { ExpReport } from '../game/progression';
+import { resultPenaltyText, type ExpReport } from '../game/progression';
 import type { RecruitOffer } from '../game/recruit';
 import { gameStats, realStats, type PokemonInstance } from '../game/stats';
 import { ratingsOf } from '../game/save';
@@ -373,6 +373,7 @@ function showPostMatch(
   const them: 0 | 1 = humanTeam === 0 ? 1 : 0;
   const verdict =
     match.winner === humanTeam ? ['Vittoria', 'chip-mint'] : match.winner === them ? ['Sconfitta', 'chip-pink'] : ['Pareggio', 'chip-sky'];
+  const penalty = resultPenaltyText(match.winner === humanTeam ? 'w' : match.winner === them ? 'l' : 'd');
   const so = match.shootout;
   const shootoutHtml = so
     ? `<div class="shootout">
@@ -453,6 +454,7 @@ function showPostMatch(
         <div class="rs-team" style="--team:${t1.color}"><b>${esc(t1.name)}</b><small>${esc(scorers(1))}</small></div>
       </div>
       ${shootoutHtml}
+      ${penalty ? `<p class="penalty">${esc(penalty)}</p>` : ''}
       <p class="muted">Tutti i Pokémon sono tornati allo stadio base.</p>
       <button class="primary big" data-continue>Continua</button>
     </section>

@@ -256,4 +256,6 @@ export function neighbors(id: string): string[] {
 }
 
 /** Livello di un allenatore del percorso. */
-export const trainerLevel = (loc: KantoLocation, t: RouteTrainer) => loc.level + (t.levelBonus ?? 0);
+/** Livelli in più degli allenatori sul luogo: la tua squadra parte già al 30 e cresce fino al tetto. */
+export const TRAINER_LEVEL = { bonus: 2 };
+export const trainerLevel = (loc: KantoLocation, t: RouteTrainer) => loc.level + TRAINER_LEVEL.bonus + (t.levelBonus ?? 0);

@@ -18,7 +18,12 @@ export interface SaveData {
   formation: FormationKey;
   /** uid del Pokémon per ogni posizione del modulo (stesso ordine di FORMATIONS[formation].slots). */
   lineup: (string | null)[];
+  /** Sessioni di allenamento EV (ATT/DIF/VEL/PV): 3 per ogni luogo nuovo, quelle non usate restano. */
   sessionsLeft: number;
+  /** Sparring (esperienza): si ricaricano dopo ogni partita, di più se vinci. */
+  sparringLeft: number;
+  /** Luoghi che ti hanno già dato le loro sessioni di allenamento (una volta sola ciascuno). */
+  trainedAt: string[];
   /** Partite giocate + 1 (palestre e percorso). */
   matchday: number;
   /** Medaglie vinte: le palestre si battono in ordine, quindi basta il numero. */
@@ -37,7 +42,21 @@ export interface SaveData {
 }
 
 const KEY = 'pokecalcio-save';
-export const SESSIONS_PER_MATCHDAY = 3;
+/** Sparring dopo una partita: l'esperienza si può sempre grindare, fino al tetto di livello. */
+export const SPARRING_PER_MATCH = { w: 3, d: 2, l: 1 } as const;
+
+/** Sessioni di allenamento che ricevi arrivando per la prima volta in un luogo. */
+export const SESSIONS_PER_PLACE = 3;
+
+/** Arrivo in un luogo: la prima volta dà le sue sessioni di allenamento. Restituisce quante. */
+export function arriveAt(save: SaveData, id: string): number {
+  save.location = id;
+  if (!save.visited.includes(id)) save.visited.push(id);
+  if (save.trainedAt.includes(id)) return 0;
+  save.trainedAt.push(id);
+  save.sessionsLeft += SESSIONS_PER_PLACE;
+  return SESSIONS_PER_PLACE;
+}
 
 /**
  * Gruppo da cui scegli la prima squadra (solo 5): forme base di forza paragonabile, con ruoli diversi.
@@ -64,13 +83,15 @@ export function newSave(): SaveData {
     roster,
     formation: 'rombo',
     lineup: [],
-    sessionsLeft: SESSIONS_PER_MATCHDAY,
+    sessionsLeft: SESSIONS_PER_PLACE,
+    sparringLeft: SPARRING_PER_MATCH.w,
     matchday: 1,
     badges: 0,
     league: null,
     titles: 0,
     location: 'biancavilla',
     visited: ['biancavilla'],
+    trainedAt: ['biancavilla'],
     defeated: [],
     legendaries: [],
     record: { w: 0, d: 0, l: 0, gf: 0, ga: 0 },
@@ -95,6 +116,9 @@ export function loadSave(): SaveData {
         data.league ??= null;
         data.titles ??= 0;
         data.legendaries ??= [];
+        // prima l'allenamento si ricaricava a ogni partita: i luoghi già visitati contano come usati
+        data.trainedAt ??= [...(data.visited ?? [])];
+        data.sparringLeft ??= SPARRING_PER_MATCH.w;
         // carriere di prima della mappa: si riparte dalla città dell'ultima medaglia
         if (!data.location) {
           const lastGymCity = KANTO.find((l) => l.gym === data.badges - 1);

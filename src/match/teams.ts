@@ -83,7 +83,7 @@ interface EliteDef {
 }
 
 /** Allenamento delle palestre: le prime sono alla portata di una squadra appena formata, le ultime al massimo. */
-export const GYM_TRAINING = { first: 0.3, last: 1 };
+export const GYM_TRAINING = { first: 0.1, last: 0.7 };
 export const gymTraining = (index: number) =>
   GYM_TRAINING.first + ((GYM_TRAINING.last - GYM_TRAINING.first) * index) / 7;
 
@@ -144,9 +144,19 @@ function localWild(loc: KantoLocation): string[] {
 }
 
 /** Allenatori non d'élite: talento casuale e un po' di allenamento, che cresce con il livello. */
-function trainedInstance(key: string, level: number) {
+/** Difficoltà di allenatori e selvatici (tarata con `npm run career`). */
+export const TUNING = {
+  /** EV degli allenatori dei percorsi: base + 12 per livello sopra il 25. */
+  trainerEvBase: 510,
+  /** I selvatici della partitella stanno al massimo tanti livelli sotto la tua squadra… */
+  wildGap: 1,
+  /** …e hanno questo allenamento (EV sparsi). */
+  wildEvs: 300,
+};
+
+function trainedInstance(key: string, level: number, evBase = TUNING.trainerEvBase) {
   const inst = createInstance(key, Math.max(5, Math.min(100, level)));
-  spreadEvs(inst, Math.min(510, Math.max(0, (level - 25) * 12)));
+  spreadEvs(inst, Math.min(510, evBase + Math.max(0, (level - 25) * 12)));
   return inst;
 }
 
@@ -174,7 +184,7 @@ export function buildLegendaryTeam(loc: KantoLocation): TeamSetup {
   boss.ivs = { hp: 31, atk: 31, def: 31, spa: 31, spd: 31, spe: 31 };
   const wild = localWild(loc);
   // la sua scorta: 4 selvatici della zona pescati a caso, al livello pieno e allenati
-  const others = Array.from({ length: 4 }, () => trainedInstance(wild[Math.floor(Math.random() * wild.length)], loc.level));
+  const others = Array.from({ length: 4 }, () => trainedInstance(wild[Math.floor(Math.random() * wild.length)], loc.level, 0));
   const formation: FormationKey = 'rombo';
   // in campo tutti e cinque, il portiere è il più adatto
   const { lineup } = bestLineup([boss, ...others], formation);
@@ -187,12 +197,19 @@ export function buildLegendaryTeam(loc: KantoLocation): TeamSetup {
  * di unirsi). Pokémon selvatici della zona, senza allenamento, poco sotto il livello del luogo;
  * nelle città senza selvatici giocano quelli dei dintorni.
  */
-export function buildWildTeam(loc: KantoLocation): TeamSetup {
+export function buildWildTeam(loc: KantoLocation, playerLevel = 0): TeamSetup {
   const wild = localWild(loc);
   const keys = Array.from({ length: 7 }, () => wild[Math.floor(Math.random() * wild.length)]);
   const formation: FormationKey = Math.random() < 0.5 ? 'rombo' : 'quadrato';
-  const level = () => Math.max(5, loc.level - 2 + Math.floor(Math.random() * 2));
-  const { lineup, bench } = bestLineup(keys.map((k) => createInstance(k, level())), formation);
+  // nei luoghi già superati i selvatici non restano troppo indietro: altrimenti finisce 14-1
+  const base = Math.max(loc.level - 2, playerLevel - TUNING.wildGap);
+  const level = () => Math.max(5, Math.min(100, base + Math.floor(Math.random() * 2)));
+  const insts = keys.map((k) => {
+    const inst = createInstance(k, level());
+    spreadEvs(inst, TUNING.wildEvs);
+    return inst;
+  });
+  const { lineup, bench } = bestLineup(insts, formation);
   const name = loc.wild.length ? `Selvatici di ${loc.name}` : `Selvatici dei dintorni di ${loc.name}`;
   return teamFrom(name, '#7dd1b8', false, formation, lineup, bench);
 }
