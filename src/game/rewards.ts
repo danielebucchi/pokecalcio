@@ -1,7 +1,7 @@
 import { POKEDEX } from '../data/pokedex';
 import { KANTO, RIVAL_STEPS } from './kanto';
 import { levelCap } from './progression';
-import { ROSTER_MAX, SESSIONS_PER_PLACE, addToRoster, type SaveData } from './save';
+import { ROSTER_MAX, SESSIONS_PER_PLACE, TO_BOX, addToRoster, eventsFound, type SaveData } from './save';
 import { createInstance } from './stats';
 
 /**
@@ -28,7 +28,7 @@ export const SIDE_MISSIONS: SideMission[] = [
   },
   {
     id: 'events', name: 'Eventi nascosti',
-    progress: (save) => [save.events.length, KANTO.reduce((a, l) => a + (l.events?.length ?? 0), 0)],
+    progress: (save) => [eventsFound(save), KANTO.reduce((a, l) => a + (l.events?.length ?? 0), 0)],
     // quello che dorme sul Percorso 12
     reward: { pokemon: 'snorlax' },
   },
@@ -69,7 +69,8 @@ export function claimReward(save: SaveData, m: SideMission, releaseUid?: string)
     const inst = createInstance(m.reward.pokemon, rewardLevel(save));
     if (!addToRoster(save, inst, releaseUid)) return null;
     save.rewards.push(m.id);
-    return `${POKEDEX[m.reward.pokemon].name} si unisce alla tua squadra!`;
+    // come i regali dei giochi; con la rosa piena, chi esce va nel PC di Bill
+    return `Hai ricevuto ${POKEDEX[m.reward.pokemon].name}!${releaseUid === TO_BOX ? ` ${POKEDEX[m.reward.pokemon].name} è stato trasferito nel PC di Bill!` : ''}`;
   }
   save.sessionsLeft += m.reward.sessions;
   save.rewards.push(m.id);

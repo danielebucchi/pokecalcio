@@ -1,3 +1,5 @@
+import { whereToFind } from '../game/dexGuide';
+import { ACHIEVEMENTS, ACHIEVEMENT_SESSIONS, achievementById } from '../game/achievements';
 import { POKEDEX, TYPE_NAMES, type PokeType } from '../data/pokedex';
 import { GYMS, type Gym } from '../game/gyms';
 import {
@@ -13,16 +15,16 @@ import {
   applyDrill, currentStats, drillBlock, drillPreview, drillStat, expToNext, suggestedDrill, type Drill,
 } from '../game/progression';
 import {
-  BENCH_MAX, ROSTER_MAX, SESSIONS_PER_PLACE, autoBench, autoLineup, benchOf, bestRating, bestRole, eventState, exportSave, releasable, releasePokemon, rivalGate, teachTechnique, techniquesAvailable, trainerById as routeTrainer, findOwned, lineupProblem, ratingsOf,
+  BENCH_MAX, ROSTER_MAX, SESSIONS_PER_PLACE, autoBench, autoLineup, benchOf, bestRating, bestRole, eventChoices, eventState, eventsFound as eventsTaken, exportSave, releasable, depositPokemon, boxLock, withdrawPokemon, TO_BOX, rivalGate, teachTechnique, techniquesAvailable, trainerById as routeTrainer, findOwned, lineupProblem, ratingsOf,
   type OwnedPokemon, type SaveData,
 } from '../game/save';
 import type { PokemonInstance, Role } from '../game/stats';
 import { MAX_SUBS, type TeamSetup } from '../match/engine';
 import { clubTeam, evolvedForm, gymLevel } from '../match/teams';
-import { SIDE_MISSIONS, claimReward, rewardLabel } from '../game/rewards';
+import { SIDE_MISSIONS, claimReward, missionComplete, rewardLabel } from '../game/rewards';
 import { BADGE_BONUS, BADGE_BONUS_PCT, TECHNIQUES, techniqueById, type TechniqueId } from '../game/techniques';
 import { esc, evoLine, teamTable } from './common';
-import { spriteUrl } from './sprites';
+import { medalHtml, spriteUrl } from './sprites';
 import { bindThemeToggle, themeToggleHtml } from './theme';
 
 export type HubTab = 'squad' | 'training' | 'map' | 'missions';
@@ -57,6 +59,8 @@ export interface HubState {
   slot: number;
   /** Pokémon che stai per lasciare andare (aspetta il secondo tocco). */
   releasing?: string | null;
+  /** Pokémon del Box da ritirare, in attesa di scegliere chi ci va al suo posto (rosa piena). */
+  withdrawing?: string | null;
   /** Tecnica che stai per insegnare, "tecnica:uid" (aspetta il secondo tocco). */
   teaching?: string | null;
   /** Pokémon a cui stai dando un soprannome (uid). */
@@ -142,6 +146,7 @@ export function renderHub(app: HTMLElement, save: SaveData, ch: Challenges, stat
     <header class="hub-head" style="--team:${save.color}">
       <div class="club">
         <h1>${esc(save.clubName)}</h1>
+        ${achievementById(save.title) ? `<span class="club-title">🏆 ${esc(achievementById(save.title)!.name)}</span>` : ''}
         <div class="record">
           <span class="chip chip-mint" title="Vittorie">${r.w} V</span>
           <span class="chip" title="Pareggi">${r.d} P</span>
@@ -329,13 +334,35 @@ function renderMissions(main: HTMLElement, save: SaveData, state: HubState, acti
     </section>
     ${state.message ? `<div class="toast">${esc(state.message)}</div>` : ''}
     <div class="missions-grid">
-      <section class="card">
-        <h3>Missioni facoltative</h3>
+      <details class="card fold side-missions" ${SIDE_MISSIONS.some((m) => missionComplete(save, m) && !save.rewards.includes(m.id)) ? 'open' : ''}>
+        <summary><b>Missioni facoltative</b> <small class="muted">${SIDE_MISSIONS.filter((m) => save.rewards.includes(m.id)).length}/${SIDE_MISSIONS.length} premi ritirati</small></summary>
         <div class="ms-side">${sideRows}</div>
-      </section>
+      </details>
+      ${achievementsHtml(save)}
       ${pokedexHtml(save)}
       ${careerStatsHtml(save)}
     </div>`;
+
+  // Pokédex: dove trovare il Pokémon toccato (il nome resta segreto finché non l'hai visto)
+  const dexInfo = main.querySelector<HTMLElement>('.dex-info');
+  main.querySelectorAll<HTMLButtonElement>('[data-dex]').forEach((b) => {
+    b.onclick = () => {
+      const k = b.dataset.dex!;
+      const sp = POKEDEX[k];
+      const known = save.dex.seen.includes(k);
+      main.querySelectorAll('.dex-cell.picked').forEach((c) => c.classList.remove('picked'));
+      b.classList.add('picked');
+      dexInfo!.innerHTML = `<b>#${String(sp.dex).padStart(3, '0')} ${known ? esc(sp.name) : '???'}</b> · ${esc(whereToFind(k))}`;
+    };
+  });
+
+  // titolo del club: uno degli obiettivi raggiunti (toccando di nuovo lo si toglie)
+  main.querySelectorAll<HTMLButtonElement>('[data-title]').forEach((b) => {
+    b.onclick = () => {
+      save.title = save.title === b.dataset.title ? undefined : b.dataset.title;
+      actions.changed();
+    };
+  });
 
   // premi: se la rosa è piena, per un Pokémon in premio si sceglie chi lasciare andare
   main.querySelectorAll<HTMLButtonElement>('[data-reward]').forEach((b) => {
@@ -348,8 +375,8 @@ function renderMissions(main: HTMLElement, save: SaveData, state: HubState, acti
         return;
       }
       const box = main.querySelector<HTMLElement>(`[data-mission="${m.id}"] .ms-prize`)!;
-      box.innerHTML = `<p class="swap-title">Rosa piena (${save.roster.length}/${ROSTER_MAX}): chi lasci andare per fargli posto?</p>
-        <div class="swap-list">${releasable(save)
+      box.innerHTML = `<p class="swap-title">Rosa piena (${save.roster.length}/${ROSTER_MAX}): chi mandi nel PC di Bill?</p>
+        <div class="swap-list"><button data-release-for="${TO_BOX}">📦 Il nuovo arrivato</button>${releasable(save)
           .map((p) => `<button data-release-for="${p.uid}"><img src="${sprite(p)}" alt=""> ${nameOf(p)} <small>Lv${p.level}</small></button>`)
           .join('')}</div>`;
       box.querySelectorAll<HTMLButtonElement>('[data-release-for]').forEach((r) => {
@@ -490,6 +517,7 @@ function renderSquad(main: HTMLElement, save: SaveData, state: HubState, actions
         </div>
         <p class="muted">${formation.description}</p>
         ${benchHtml(save, bench, state)}
+        ${boxHtml(save, state)}
       </div>
       <div class="card pick-panel">
         <div class="pick-head">
@@ -544,7 +572,7 @@ function renderSquad(main: HTMLElement, save: SaveData, state: HubState, actions
       actions.changed();
     };
   });
-  // lasciare andare: secondo tocco per confermare
+  // mandare nel Box: secondo tocco per confermare (durante l'avventura non si ritira)
   main.querySelectorAll<HTMLButtonElement>('[data-release]').forEach((b) => {
     b.onclick = () => {
       const uid = b.dataset.release!;
@@ -554,10 +582,58 @@ function renderSquad(main: HTMLElement, save: SaveData, state: HubState, actions
         return;
       }
       state.releasing = null;
-      releasePokemon(save, uid);
+      depositPokemon(save, uid);
       actions.changed();
     };
   });
+  // PC di Bill: ritiro (con la rosa piena si sceglie chi ci va al suo posto)
+  main.querySelectorAll<HTMLButtonElement>('[data-withdraw]').forEach((b) => {
+    b.onclick = () => {
+      const uid = b.dataset.withdraw!;
+      if (save.roster.length < ROSTER_MAX) {
+        withdrawPokemon(save, uid);
+        actions.changed();
+        return;
+      }
+      state.withdrawing = state.withdrawing === uid ? null : uid;
+      renderSquad(main, save, state, actions);
+    };
+  });
+  main.querySelectorAll<HTMLButtonElement>('[data-swap-out]').forEach((b) => {
+    b.onclick = () => {
+      withdrawPokemon(save, state.withdrawing!, b.dataset.swapOut);
+      state.withdrawing = null;
+      actions.changed();
+    };
+  });
+}
+
+/** PC di Bill: chi non sta nei 14 della rosa. Durante l'avventura si deposita soltanto. */
+function boxHtml(save: SaveData, state: HubState): string {
+  if (!save.box.length) return '';
+  const lock = boxLock(save);
+  const rows = [...save.box]
+    .sort((a, b) => POKEDEX[a.speciesKey].dex - POKEDEX[b.speciesKey].dex)
+    .map((p) => {
+      const { role: best } = bestRole(p);
+      const picking = state.withdrawing === p.uid;
+      const swap = picking
+        ? `<div class="swap-list">${releasable(save)
+            .map((r) => `<button data-swap-out="${r.uid}"><img src="${sprite(r)}" alt=""> ${nameOf(r)} <small>Lv${r.level}</small></button>`)
+            .join('')}</div>`
+        : '';
+      return `<div class="reserve">
+        <img src="${sprite(p)}" alt="">
+        <span class="reserve-body"><b>${nameOf(p)}</b> <small>Lv${p.level}</small>
+          <small class="muted"><span class="role role-${best}">${best}</span> voto ${Math.round(bestRating(p))}</small></span>
+        ${lock ? '' : `<span class="reserve-actions"><button data-withdraw="${p.uid}">${picking ? 'Annulla' : 'Ritira'}</button></span>`}
+      </div>${picking ? `<p class="swap-title">Rosa piena: chi va nel PC al suo posto?</p>${swap}` : ''}`;
+    })
+    .join('');
+  return `<details class="card fold box-card" ${state.withdrawing ? 'open' : ''}>
+    <summary><b>PC di Bill</b> <small class="muted">${save.box.length} Pokémon${lock ? ' · ' + esc(lock) : ''}</small></summary>
+    ${rows}
+  </details>`;
 }
 
 /** Panchina (le uniche riserve che entrano in partita) e il resto della rosa, in tribuna. */
@@ -573,7 +649,7 @@ function benchHtml(save: SaveData, bench: OwnedPokemon[], state: HubState): stri
         <small class="muted"><span class="role role-${best}">${best}</span> voto ${Math.round(bestRating(p))}</small></span>
       <span class="reserve-actions">
         <button data-bench="${p.uid}" ${!inBench && full ? 'disabled title="Panchina piena: togline uno"' : ''}>${inBench ? 'Togli' : 'In panchina'}</button>
-        <button class="${confirm ? 'danger' : 'link'}" data-release="${p.uid}" title="Lascia andare: libera un posto nella rosa">${confirm ? 'Sicuro?' : 'Libera'}</button>
+        <button class="${confirm ? 'danger' : 'link'}" data-release="${p.uid}" title="Mandalo nel PC di Bill: libera un posto nella rosa${save.titles ? '' : ' (lo ritiri da Campione)'}">${confirm ? 'Sicuro?' : 'Nel PC'}</button>
       </span>
     </div>`;
   };
@@ -582,7 +658,7 @@ function benchHtml(save: SaveData, bench: OwnedPokemon[], state: HubState): stri
     ${bench.length ? bench.map((p) => row(p, true)).join('') : '<p class="muted">Nessuno in panchina: senza riserve non potrai fare cambi.</p>'}
     <h3>Tribuna <small>rosa ${save.roster.length}/${ROSTER_MAX}</small></h3>
     ${stands.length ? stands.map((p) => row(p, false)).join('') : '<p class="muted">Tutta la rosa è in campo o in panchina.</p>'}
-    ${save.roster.length > ROSTER_MAX ? `<p class="toast warn">La rosa supera il limite di ${ROSTER_MAX}: per accettare nuovi Pokémon dovrai prima lasciarne andare qualcuno.</p>` : ''}
+    ${save.roster.length > ROSTER_MAX ? `<p class="toast warn">La rosa supera il limite di ${ROSTER_MAX}: per far posto ai nuovi Pokémon mandane qualcuno nel PC.</p>` : ''}
   </section>`;
 }
 
@@ -737,7 +813,7 @@ function renderTraining(main: HTMLElement, save: SaveData, state: HubState, acti
 
 /** Statistiche della carriera: classifica della rosa e partite importanti. */
 function careerStatsHtml(save: SaveData): string {
-  const rows = [...save.roster]
+  const rows = [...save.roster, ...save.box]
     .filter((p) => p.career?.matches)
     .sort((a, b) => b.career!.goals - a.career!.goals || b.career!.assists - a.career!.assists || b.career!.matches - a.career!.matches)
     .map((p, i) => {
@@ -765,25 +841,55 @@ function careerStatsHtml(save: SaveData): string {
   </details>`;
 }
 
-/** Pokédex: specie viste e prese, in ordine di numero; le Kanto (1-151) contate a parte. */
-function pokedexHtml(save: SaveData): string {
-  const seen = [...save.dex.seen].filter((k) => POKEDEX[k]).sort((a, b) => POKEDEX[a].dex - POKEDEX[b].dex);
-  const caught = new Set(save.dex.caught);
-  const kanto = (list: string[]) => list.filter((k) => POKEDEX[k].dex <= 151).length;
-  const cells = seen
-    .map((k) => {
-      const sp = POKEDEX[k];
-      const got = caught.has(k);
-      return `<span class="dex-cell ${got ? 'caught' : ''}" title="#${String(sp.dex).padStart(3, '0')} ${esc(sp.name)}${got ? ' · preso' : ' · visto'}">
-        <img src="${spriteUrl(sp.dex)}" alt="" loading="lazy">${got ? '<span class="owned-ball"></span>' : ''}
-        <small>#${String(sp.dex).padStart(3, '0')}</small>
-      </span>`;
+/** Obiettivi: raggiunti in cima, ognuno si può mostrare come titolo del club. */
+function achievementsHtml(save: SaveData): string {
+  const done = new Set(save.achievements);
+  const rows = [...ACHIEVEMENTS]
+    .sort((a, b) => Number(done.has(b.id)) - Number(done.has(a.id)))
+    .map((a) => {
+      const got = done.has(a.id);
+      const shown = save.title === a.id;
+      return `<li class="${got ? 'done' : ''}">
+        <span class="ach-icon">${got ? '🏆' : '🔒'}</span>
+        <span class="ach-body"><b>${esc(a.name)}</b><small class="muted">${esc(a.description)}</small></span>
+        ${got ? `<button class="${shown ? 'on' : ''}" data-title="${a.id}" title="${shown ? 'Togli il titolo' : 'Mostralo accanto al nome del club'}">${shown ? 'Titolo ✓' : 'Titolo'}</button>` : ''}
+      </li>`;
     })
     .join('');
+  return `<details class="card fold achievements">
+    <summary><b>Obiettivi</b> <small class="muted">${done.size}/${ACHIEVEMENTS.length} · ognuno vale +${ACHIEVEMENT_SESSIONS} sessione</small></summary>
+    <ul class="ach-list">${rows}</ul>
+  </details>`;
+}
+
+/**
+ * Pokédex: le 151 di Kanto sempre tutte in griglia (prese a colori, viste in grigio, mai viste come
+ * sagoma), poi le specie delle altre regioni già viste. Toccando una casella si legge dove trovarla.
+ */
+function pokedexHtml(save: SaveData): string {
+  const seen = new Set(save.dex.seen.filter((k) => POKEDEX[k]));
+  const caught = new Set(save.dex.caught.filter((k) => POKEDEX[k]));
+  const num = (dex: number) => `#${String(dex).padStart(3, '0')}`;
+  const cell = (k: string) => {
+    const sp = POKEDEX[k];
+    const got = caught.has(k);
+    const state = got ? 'caught' : seen.has(k) ? 'seen' : 'unseen';
+    return `<button class="dex-cell ${state}" data-dex="${k}" title="${esc(`${num(sp.dex)} ${state === 'unseen' ? '???' : sp.name}`)}">
+      <img src="${spriteUrl(sp.dex)}" alt="" loading="lazy">${got ? '<span class="owned-ball"></span>' : ''}
+      <small>${num(sp.dex)}</small>
+    </button>`;
+  };
+  const all = Object.keys(POKEDEX).sort((a, b) => POKEDEX[a].dex - POKEDEX[b].dex);
+  const kanto = all.filter((k) => POKEDEX[k].dex <= 151);
+  const others = all.filter((k) => POKEDEX[k].dex > 151 && seen.has(k));
+  const kantoCaught = kanto.filter((k) => caught.has(k)).length;
   return `<details class="card pokedex">
-    <summary><b>Pokédex</b> <small class="muted">presi ${caught.size} · visti ${seen.length} · Kanto ${kanto([...caught])}/151</small></summary>
-    <div class="dex-grid">${cells || '<p class="muted">Ancora nessuna specie.</p>'}</div>
-    <small class="muted">In grigio i Pokémon visti in partita, a colori (con la Poké Ball) quelli presi: entrati in squadra o raggiunti evolvendo in partita.</small>
+    <summary><b>Pokédex</b> <small class="muted">Kanto ${kantoCaught}/151 · presi ${caught.size} · visti ${seen.size}</small></summary>
+    <p class="dex-info muted">Tocca un Pokémon per sapere dove trovarlo.</p>
+    <h4>Kanto</h4>
+    <div class="dex-grid">${kanto.map(cell).join('')}</div>
+    ${others.length ? `<h4>Altre regioni</h4><div class="dex-grid">${others.map(cell).join('')}</div>` : ''}
+    <small class="muted">A colori (con la Poké Ball) i Pokémon presi: entrati in squadra o raggiunti evolvendo in partita. In grigio quelli visti in partita, in ombra quelli mai incontrati.</small>
   </details>`;
 }
 
@@ -955,7 +1061,7 @@ const KIND_LABEL = { city: 'Città', route: 'Percorso', dungeon: 'Luogo' } as co
 /** Eventi trovati sul totale, per chi vuole completare tutto (senza dire dove sono). */
 function eventsFound(save: SaveData): string {
   const total = KANTO.reduce((a, l) => a + (l.events?.length ?? 0), 0);
-  return total ? ` <small class="events-found" title="Pokémon degli eventi nascosti che hai ottenuto">· eventi trovati ${save.events.length}/${total}</small>` : '';
+  return total ? ` <small class="events-found" title="Pokémon degli eventi nascosti che hai ottenuto">· eventi trovati ${eventsTaken(save)}/${total}</small>` : '';
 }
 
 /** Sul telefono la mappa disegnata è nascosta: si apre a richiesta e la scelta resta finché non ricarichi. */
@@ -1062,7 +1168,7 @@ function renderMap(main: HTMLElement, save: SaveData, ch: Challenges, actions: H
     const bonus = BADGE_BONUS.find((x) => x.badge === i);
     const prize = `MT ${tech.name}${bonus ? ` · ${bonus.label} +${BADGE_BONUS_PCT}% alla squadra` : ''}`;
     return `<div class="badge-slot ${won ? 'won' : ''} ${current ? 'current' : ''}" style="--team:${g.color}" title="${esc(`${g.badge} · ${g.leader}, ${g.city} · premio: ${prize}`)}">
-      <span class="badge-medal"></span>
+      ${medalHtml(i, false, won)}
       <b>${esc(g.badge.replace('Medaglia ', ''))}</b>
       <small>${esc(g.leader)}</small>
     </div>`;
@@ -1075,7 +1181,7 @@ function renderMap(main: HTMLElement, save: SaveData, ch: Challenges, actions: H
     if (ch.gym && ch.gymTeam) {
       gymSection = `<section class="card challenge" style="--team:${ch.gym.color}">
         <div class="challenge-head">
-          <span class="badge-medal big"></span>
+          ${medalHtml(loc.gym, true)}
           <div>
             <small class="muted">Palestra di ${esc(ch.gym.city)} · livello ${gymLevel(ch.gym)}</small>
             <h2>${esc(ch.gym.leader)} <span class="chip type-chip" style="--team:${ch.gym.color}">${TYPE_NAMES[ch.gym.type]}</span></h2>
@@ -1091,7 +1197,7 @@ function renderMap(main: HTMLElement, save: SaveData, ch: Challenges, actions: H
       // dopo il titolo: rivincita, ripetibile, più forte a ogni titolo
       gymSection = `<section class="card challenge" style="--team:${g.color}">
         <div class="challenge-head">
-          <span class="badge-medal big"></span>
+          ${medalHtml(loc.gym, true)}
           <div>
             <small class="muted">Rivincita · ${esc(g.badge)} già tua · livello ${ch.rematch.roster[0].inst.level}</small>
             <h2>${esc(g.leader)} <span class="chip type-chip" style="--team:${g.color}">${TYPE_NAMES[g.type]}</span></h2>
@@ -1146,19 +1252,21 @@ function renderMap(main: HTMLElement, save: SaveData, ch: Challenges, actions: H
     })
     .map((ev) => {
       const lv = eventLevel(loc, ev);
-      const mons = ev.species
+      const choices = eventChoices(save, ev);
+      const again = save.events.includes(ev.id);
+      const mons = choices
         .map((k) => `<span class="wild-mon"><img src="${spriteUrl(POKEDEX[k].dex)}" alt=""><small>${esc(POKEDEX[k].name)}</small></span>`)
         .join('');
-      const buttons = ev.species
+      const buttons = choices
         .map((k) => `<span class="event-play">
           <button class="primary" data-event-play="${ev.id}:${k}" ${problem ? 'disabled' : ''}>Sfida per ${esc(POKEDEX[k].name)}</button>
           <button data-event-skip="${ev.id}:${k}" ${problem ? 'disabled' : ''} title="Si gioca subito senza vederla">Salta ⏭</button>
         </span>`)
         .join('');
       return `<section class="card event">
-        <small class="muted">✦ Evento speciale · livello ${lv}${ev.species.length > 1 ? ' · ne scegli uno' : ''}</small>
+        <small class="muted">✦ Evento speciale · livello ${lv}${choices.length > 1 ? ' · ne scegli uno' : ''}</small>
         <h3>${esc(ev.title)}</h3>
-        <p class="muted">${esc(ev.text)} Per averlo vinci la sua sfida: gioca con 4 selvatici di qui, senza cambi.</p>
+        <p class="muted">${again ? 'Da Campione puoi avere anche quello che non avevi scelto.' : esc(ev.text)} Per averlo vinci la sua sfida: gioca con 4 selvatici di qui, senza cambi.</p>
         <div class="wild">${mons}</div>
         <div class="event-actions">${buttons}</div>
       </section>`;
@@ -1246,7 +1354,7 @@ function renderMap(main: HTMLElement, save: SaveData, ch: Challenges, actions: H
         <li><b>Tetto di livello</b>: si cresce fino a 2 livelli sopra la prossima palestra (68 prima della Lega), poi serve la medaglia. Da Campione il tetto sparisce.</li>
         <li><b>Eventi nascosti</b>: come in Pokémon Giallo, in Kanto ci sono Pokémon speciali che qualcuno ti affida, una volta sola. Non sono segnati da nessuna parte: compaiono quando sei nel posto giusto al momento giusto (a volte dopo aver battuto un allenatore o con abbastanza medaglie) e vanno conquistati vincendo la loro sfida. Il contatore accanto alle medaglie ti dice quanti ne hai trovati.</li>
         <li><b>Leggendari</b>: Zapdos alla Centrale Elettrica, Articuno alle Isole Spumarine, Moltres sulla Via Vittoria e Mewtwo nella Grotta Ignota (aperta dopo aver vinto la Lega). Guidano una squadra di selvatici: se vinci, chiedono di unirsi a te.</li>
-        <li><b>Nuovi Pokémon</b>: niente lotte né Poké Ball. Se vinci la partitella con i selvatici, di solito uno chiede di unirsi alla squadra e tu decidi se accettare. Chi evolve si convince più facilmente, i Pokémon già forti e rari molto meno, e conta anche come ha giocato contro di te. La rosa ha al massimo ${ROSTER_MAX} Pokémon: se è piena, per accettare ne lasci andare uno.</li>
+        <li><b>Nuovi Pokémon</b>: niente lotte né Poké Ball. Se vinci la partitella con i selvatici, di solito uno chiede di unirsi alla squadra e tu decidi se catturarlo. Chi evolve si convince più facilmente, i Pokémon già forti e rari molto meno, e conta anche come ha giocato contro di te. La rosa ha al massimo ${ROSTER_MAX} Pokémon: se è piena, per accettare ne lasci andare uno.</li>
         <li><b>Palestre</b>: si battono in ordine, ognuna nella sua città; ognuna ha un tipo e un livello fisso. In campo ci sono sempre il suo asso e la sua contromossa (l'unico Pokémon di un altro tipo); gli altri li sceglie studiando la tua squadra (titolari e panchina), portando chi mette in difficoltà i tuoi tipi. Vincere dà la medaglia; in caso di pareggio si tirano i rigori.</li>
         <li><b>Esperienza</b>: come nei giochi, un avversario di livello più alto rende di più; uno più debole di te rende poco.</li>
         <li><b>Statistiche</b>: Attacco e Difesa sono il valore più alto tra fisico e speciale; Velocità è quanto corre; i PV sono la resistenza. Partono dalle statistiche di Bulbapedia e crescono con livello e allenamento.</li>

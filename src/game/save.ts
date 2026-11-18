@@ -2,7 +2,7 @@ import { POKEDEX } from '../data/pokedex';
 import { FORMATIONS, type FormationKey } from './formations';
 import { registerCaught, type Dex } from './dex';
 import { TECHNIQUES, type TechniqueId } from './techniques';
-import { KANTO, RIVAL_STEPS, type KantoLocation, type PlaceEvent, type RouteTrainer } from './kanto';
+import { KANTO, RIVAL_STEPS, locationById, type KantoLocation, type PlaceEvent, type RouteTrainer } from './kanto';
 import type { LeagueRun } from './league';
 import { createInstance, gameStats, realStats, roleRatings, type PokemonInstance } from './stats';
 
@@ -71,6 +71,11 @@ export interface SaveData {
   /** Partite importanti, dalla più recente (al massimo HISTORY_MAX). */
   history: HistoryEntry[];
   record: { w: number; d: number; l: number; gf: number; ga: number };
+  /** Obiettivi raggiunti (id, vedi achievements.ts) e quello scelto come titolo del club. */
+  achievements: string[];
+  title?: string;
+  /** PC di Bill: chi esce dalla rosa finisce qui, senza limiti (si ritira solo da Campione, in città). */
+  box: OwnedPokemon[];
 }
 
 const KEY = 'pokecalcio-save';
@@ -145,6 +150,8 @@ export function newSave(): SaveData {
     dex: { seen: [], caught: [] },
     history: [],
     record: { w: 0, d: 0, l: 0, gf: 0, ga: 0 },
+    achievements: [],
+    box: [],
   };
 }
 
@@ -185,6 +192,8 @@ export function loadSave(): SaveData {
         data.techniquesUsed ??= [];
         // il Pokédex parte dalla rosa attuale
         data.history ??= [];
+        data.achievements ??= [];
+        data.box ??= [];
         // carriere di prima del Campione Blu: chi aveva già vinto la Lega l'ha battuto
         if (data.league?.champion === 'you' && !data.league.championMatch) data.league.championMatch = data.titles ? 'won' : 'pending';
         data.dex ??= { seen: data.roster.map((p) => p.speciesKey), caught: data.roster.map((p) => p.speciesKey) };
@@ -305,19 +314,51 @@ export function benchOf(save: SaveData): OwnedPokemon[] {
 export const releasable = (save: SaveData) => save.roster.filter((p) => !save.lineup.includes(p.uid));
 
 /** Lascia andare un Pokémon della rosa (non uno schierato). */
-export function releasePokemon(save: SaveData, uid: string): boolean {
-  if (save.lineup.includes(uid) || !findOwned(save, uid)) return false;
-  save.roster = save.roster.filter((p) => p.uid !== uid);
+/** Manda un Pokémon della rosa (non titolare) nel PC di Bill. */
+export function depositPokemon(save: SaveData, uid: string): boolean {
+  const p = findOwned(save, uid);
+  if (save.lineup.includes(uid) || !p) return false;
+  save.roster = save.roster.filter((x) => x.uid !== uid);
   save.bench = save.bench.filter((b) => b !== uid);
+  save.box.push(p);
   return true;
 }
 
 /**
- * Aggiunge un Pokémon alla rosa; se è piena serve lasciarne andare uno (`releaseUid`).
- * Se in panchina c'è posto, ci va subito. Restituisce false se non c'è spazio.
+ * Il Box si apre solo da Campione e al Centro Pokémon di una città: durante l'avventura la rosa resta
+ * di 14, così le palestre non si battono pescando ogni volta la squadra perfetta da una rosa infinita.
+ */
+export function boxLock(save: SaveData): string | null {
+  if (!save.titles) return 'Da Campione potrai ritirarli al Centro Pokémon di una città.';
+  if (locationById(save.location).kind !== 'city') return 'Si ritirano al Centro Pokémon: vai in una città.';
+  return null;
+}
+
+/** Ritira un Pokémon dal Box; con la rosa piena `swapUid` è chi ci va al suo posto. */
+export function withdrawPokemon(save: SaveData, uid: string, swapUid?: string): boolean {
+  const p = save.box.find((x) => x.uid === uid);
+  if (!p || boxLock(save)) return false;
+  if (save.roster.length >= ROSTER_MAX && !(swapUid && depositPokemon(save, swapUid))) return false;
+  save.box = save.box.filter((x) => x.uid !== uid);
+  save.roster.push(p);
+  return true;
+}
+
+/** `releaseUid` speciale: il nuovo arrivato va direttamente nel PC. */
+export const TO_BOX = 'box';
+
+/**
+ * Aggiunge un Pokémon alla rosa; se è piena se ne manda uno nel Box (`releaseUid`), oppure ci va lui
+ * (`TO_BOX`). Se in panchina c'è posto, ci va subito. Restituisce false se non c'è spazio.
  */
 export function addToRoster(save: SaveData, inst: PokemonInstance, releaseUid?: string): boolean {
-  if (releaseUid) releasePokemon(save, releaseUid);
+  if (releaseUid === TO_BOX) {
+    if (save.box.some((p) => p.uid === inst.uid)) return false;
+    save.box.push({ ...inst, exp: 0 });
+    registerCaught(save, inst.speciesKey);
+    return true;
+  }
+  if (releaseUid) depositPokemon(save, releaseUid);
   if (save.roster.length >= ROSTER_MAX || save.roster.some((p) => p.uid === inst.uid)) return false;
   save.roster.push({ ...inst, exp: 0 });
   registerCaught(save, inst.speciesKey);
@@ -349,8 +390,24 @@ export function rivalGate(save: SaveData, l: KantoLocation, gym = false): RouteT
 }
 
 /** Stato di un evento: già ritirato, pronto, oppure cosa manca. */
+/** Id con cui si segna la seconda scelta di un evento (l'altro fossile, l'altro lottatore del Dojo). */
+export const secondPick = (id: string) => `${id}:bis`;
+
+/**
+ * Specie in palio ora in un evento. Negli eventi a scelta (fossili, Dojo) quella che non hai preso
+ * torna in palio dopo il titolo di Campione: nei giochi si aveva con uno scambio, qui serve per il Pokédex.
+ */
+export function eventChoices(save: SaveData, ev: PlaceEvent): string[] {
+  if (!save.events.includes(ev.id)) return ev.species;
+  if (ev.species.length < 2 || !save.titles || save.events.includes(secondPick(ev.id))) return [];
+  return ev.species.filter((k) => !save.dex.caught.includes(k));
+}
+
+/** Eventi ritirati (senza contare le seconde scelte). */
+export const eventsFound = (save: SaveData) => save.events.filter((id) => !id.endsWith(':bis')).length;
+
 export function eventState(save: SaveData, ev: PlaceEvent): { done: true } | { done: false; missing: string | null } {
-  if (save.events.includes(ev.id)) return { done: true };
+  if (!eventChoices(save, ev).length) return { done: true };
   if (ev.badges && save.badges < ev.badges) return { done: false, missing: `Serve${ev.badges === 1 ? '' : 'no'} ${ev.badges} ${ev.badges === 1 ? 'medaglia' : 'medaglie'}` };
   const left = (ev.beat ?? []).filter((id) => !save.defeated.includes(id));
   if (left.length) return { done: false, missing: `Prima batti ${left.length === 1 ? "l'allenatore" : 'gli allenatori'} di questo luogo` };

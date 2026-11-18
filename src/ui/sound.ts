@@ -190,3 +190,24 @@ export function stopMusic() {
   if (timer !== null) window.clearInterval(timer);
   timer = null;
 }
+
+// ── vibrazione (telefoni Android: Safari su iPhone non la supporta) ──
+
+const VIBE_KEY = 'pokecalcio-vibe';
+/** Solo sui telefoni: anche Chrome sul computer dichiara la vibrazione, ma non c'è niente che vibri. */
+export const canVibrate = () =>
+  typeof navigator !== 'undefined' && 'vibrate' in navigator && window.matchMedia('(pointer: coarse)').matches;
+export const vibeEnabled = () => canVibrate() && localStorage.getItem(VIBE_KEY) !== '0';
+export const setVibe = (on: boolean) => localStorage.setItem(VIBE_KEY, on ? '1' : '0');
+
+const PATTERNS: Partial<Record<Sfx, number[]>> = {
+  goal: [120, 60, 120, 60, 260],
+  goalAgainst: [200],
+  fulltime: [90, 70, 90, 70, 300],
+  evo: [40, 40, 40, 40, 40, 40, 160],
+};
+
+export function vibrate(kind: Sfx) {
+  const pattern = PATTERNS[kind];
+  if (pattern && vibeEnabled()) navigator.vibrate(pattern);
+}

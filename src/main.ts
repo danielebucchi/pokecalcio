@@ -1,3 +1,4 @@
+import { checkAchievements } from './game/achievements';
 import './style.css';
 import { POKEDEX } from './data/pokedex';
 import { GYMS, nextGym, type Gym } from './game/gyms';
@@ -8,7 +9,7 @@ import {
 import { awardMatch } from './game/progression';
 import { registerMatch } from './game/dex';
 import { recruitOffers, type RecruitOffer } from './game/recruit';
-import { ROSTER_MAX, addToRoster, arriveAt, recordHistory, chooseStarters, importSave, lineupProblem, rivalGate, loadSave, newSave, releasable, storeSave, type SaveData } from './game/save';
+import { ROSTER_MAX, secondPick, addToRoster, arriveAt, recordHistory, chooseStarters, importSave, lineupProblem, rivalGate, loadSave, newSave, releasable, storeSave, type SaveData } from './game/save';
 import type { Match, TeamSetup } from './match/engine';
 import {
   buildChampionTeam, buildEventTeam, buildGymTeam, buildRematchTeam, postGameLevels, buildLeagueTeam, buildLegendaryTeam, buildTrainerTeam, buildWildTeam, clubTeam, simulateMatch,
@@ -216,15 +217,19 @@ function playMatch(kind: ChallengeKind, trainerId?: string, skip = false) {
         : [];
       const report = awardMatch(save, match, 0);
       registerMatch(save, match, 0);
+      const achievements = checkAchievements(save, match, kind);
       storeSave(save);
-      return { report, banner, offers };
+      return { report, banner, offers, achievements };
     },
     recruit(inst, releaseUid) {
       if (!addToRoster(save, inst, releaseUid)) return false;
       const legendary = locationById(save.location).legendary;
       if (kind === 'legendary' && legendary?.key === inst.speciesKey) save.legendaries.push(inst.speciesKey);
       // l'evento si chiude quando accetti il Pokémon (se lo lasci andare, puoi rigiocare la sfida)
-      if (kind === 'event' && inst.speciesKey === eventSpecies && !save.events.includes(eventId)) save.events.push(eventId);
+      if (kind === 'event' && inst.speciesKey === eventSpecies) {
+        const tag = save.events.includes(eventId) ? secondPick(eventId) : eventId;
+        if (!save.events.includes(tag)) save.events.push(tag);
+      }
       storeSave(save);
       return true;
     },
@@ -247,10 +252,10 @@ function playMatch(kind: ChallengeKind, trainerId?: string, skip = false) {
 
 function trainerOutcome(t: RouteTrainer, match: Match): MatchBanner {
   if (match.winner !== 0) {
-    return { title: `${t.name} ti ha battuto`, text: 'Allenati e riprova quando vuoi: resta qui ad aspettarti.', color: '#8ec5d8' };
+    return { title: `Hai perso contro ${t.name}!`, text: 'Allenati e riprova quando vuoi: resta qui ad aspettarti.', color: '#8ec5d8' };
   }
   if (!save.defeated.includes(t.id)) save.defeated.push(t.id);
-  return { title: `Hai battuto ${t.name}!`, text: `Allenatori battuti finora: ${save.defeated.length}.`, color: '#8ec5d8' };
+  return { title: `Hai sconfitto ${t.name}!`, text: `Allenatori sconfitti finora: ${save.defeated.length}.`, color: '#8ec5d8' };
 }
 
 /** Sfida di un evento: vinta, il Pokémon in palio chiede di unirsi a te. */
@@ -259,7 +264,7 @@ function eventOutcome(title: string, species: string, match: Match): MatchBanner
   if (match.winner !== 0) {
     return { title: `${name} non è ancora convinto`, text: `${title}: riprova quando vuoi, la sfida resta aperta.`, color: '#e8a317' };
   }
-  return { title: `${name} vuole unirsi alla tua squadra!`, text: `${title}: accetta qui sotto. Se lo lasci andare, puoi rigiocare la sfida.`, color: '#e8a317' };
+  return { title: `${name} vuole unirsi alla tua squadra!`, text: `${title}: catturalo qui sotto. Se lo liberi, puoi rigiocare la sfida.`, color: '#e8a317' };
 }
 
 function eventOffer(species: string, match: Match): RecruitOffer[] {
@@ -276,7 +281,7 @@ function legendaryOutcome(match: Match): MatchBanner {
   }
   return {
     title: `${name} vuole unirsi alla tua squadra!`,
-    text: 'Ti ha messo alla prova e l\'hai superata: accetta qui sotto. Se lo lasci andare resta qui e potrai sfidarlo di nuovo.',
+    text: 'Ti ha messo alla prova e l\'hai superata: catturalo qui sotto. Se lo liberi resta qui e potrai sfidarlo di nuovo.',
     color: '#e8a317',
     badge: true,
   };
@@ -292,7 +297,7 @@ function legendaryOffer(match: Match): RecruitOffer[] {
 function gymOutcome(gym: Gym, match: Match): MatchBanner {
   if (match.winner !== 0) {
     return {
-      title: `${gym.leader} ti ha battuto`,
+      title: `Hai perso contro ${gym.leader}!`,
       text: `Per la ${gym.badge} serve vincere: allenati, fai esperienza sul percorso e riprova quando vuoi.`,
       color: gym.color,
     };
@@ -300,12 +305,13 @@ function gymOutcome(gym: Gym, match: Match): MatchBanner {
   save.badges++;
   const next = nextGym(save.badges);
   return {
-    title: `Hai ottenuto la ${gym.badge}!`,
+    title: `Ricevi la ${gym.badge} da ${gym.leader}!`,
     text: next
       ? `${save.badges}/${GYMS.length} medaglie: si aprono nuovi luoghi sulla mappa. Prossima palestra: ${next.leader} a ${next.city}, livello ${next.level}.`
       : `Hai tutte le ${GYMS.length} medaglie di Kanto: la Via Vittoria verso l'Altopiano Blu è aperta!`,
     color: gym.color,
     badge: true,
+    medal: GYMS.indexOf(gym),
   };
 }
 
@@ -362,7 +368,7 @@ function championOutcome(match: Match): MatchBanner {
   run.championMatch = 'won';
   save.titles++;
   return {
-    title: 'Sei il Campione della Lega Pokémon!',
+    title: 'Congratulazioni! Sei il nuovo Campione della Lega Pokémon!',
     text: `Hai battuto Blu. Titoli vinti: ${save.titles}. Il tetto di livello è sparito, si apre la Grotta Ignota e nelle città ti aspettano le rivincite con i capipalestra.`,
     color: '#e8a317',
     badge: true,
@@ -371,8 +377,8 @@ function championOutcome(match: Match): MatchBanner {
 
 function rematchOutcome(gym: Gym, match: Match): MatchBanner {
   return match.winner === 0
-    ? { title: `Hai vinto la rivincita con ${gym.leader}!`, text: 'Puoi sfidarlo di nuovo quando vuoi: dopo ogni titolo la sua squadra è più forte.', color: gym.color }
-    : { title: `${gym.leader} si prende la rivincita`, text: 'Riprova quando vuoi.', color: gym.color };
+    ? { title: `Hai sconfitto ${gym.leader}!`, text: 'Puoi sfidarlo di nuovo quando vuoi: dopo ogni titolo la sua squadra è più forte.', color: gym.color }
+    : { title: `Hai perso contro ${gym.leader}!`, text: 'Si è preso la rivincita: riprova quando vuoi.', color: gym.color };
 }
 
 showHub();

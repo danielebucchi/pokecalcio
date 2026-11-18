@@ -2,12 +2,16 @@ import { POKEDEX, TYPE_NAMES } from '../data/pokedex';
 import { resultPenaltyText, type ExpReport } from '../game/progression';
 import type { RecruitOffer } from '../game/recruit';
 import { gameStats, realStats, type PokemonInstance } from '../game/stats';
-import { ratingsOf } from '../game/save';
+import { TO_BOX, ratingsOf } from '../game/save';
 import { Match, MAX_SUBS, SIM_PER_MINUTE, formName, isActive, type MatchEvent, type Player, type TeamSetup } from '../match/engine';
+import { ACHIEVEMENT_SESSIONS, type Achievement } from '../game/achievements';
 import { Renderer } from '../match/renderer';
+import { ReplayRecorder, clipDuration, frameAt, type Snapshot } from '../match/replay';
 import { esc } from './common';
-import { spriteUrl } from './sprites';
-import { musicEnabled, playSfx, setMusic, setSfx, sfxEnabled, startMusic, stopMusic, type Sfx } from './sound';
+import { medalHtml, spriteUrl } from './sprites';
+import {
+  canVibrate, musicEnabled, playSfx, setMusic, setSfx, setVibe, sfxEnabled, startMusic, stopMusic, vibeEnabled, vibrate, type Sfx,
+} from './sound';
 import { bindThemeToggle, themeToggleHtml } from './theme';
 
 const AUTO_EVO_KEY = 'pokecalcio-autoevo';
@@ -50,15 +54,17 @@ export interface MatchBanner {
   title: string;
   text: string;
   color: string;
-  /** true = medaglia ottenuta. */
+  /** true = traguardo raggiunto (medaglia, leggendario, titolo). */
   badge?: boolean;
+  /** Medaglia di palestra vinta (indice): si mostra il suo sprite. */
+  medal?: number;
 }
 
 export interface MatchCallbacks {
   /** Eliminazione diretta: in caso di pareggio si tirano i rigori. */
   knockout?: boolean;
   /** A fine partita: aggiorna la carriera e restituisce l'esperienza guadagnata. */
-  onFinish(match: Match): { report: ExpReport[]; banner?: MatchBanner; offers?: RecruitOffer[] };
+  onFinish(match: Match): { report: ExpReport[]; banner?: MatchBanner; offers?: RecruitOffer[]; achievements?: Achievement[] };
   /**
    * Un Pokémon che ha chiesto di unirsi è stato accettato; con la rosa piena `releaseUid` è chi
    * lascia il posto. Restituisce false se non c'è spazio.
@@ -69,6 +75,9 @@ export interface MatchCallbacks {
   /** Torna all'hub: `counted` è false se la partita è stata abbandonata. */
   onLeave(counted?: boolean): void;
 }
+
+/** Nel resoconto: il nuovo arrivato è andato direttamente nel PC. */
+const BOX_LABEL = '\u0000box';
 
 export interface RosterState {
   count: number;
@@ -109,7 +118,9 @@ export function runMatch(app: HTMLElement, teams: [TeamSetup, TeamSetup], cb: Ma
           <input type="checkbox" id="autoevo"> <span class="lbl-long">Evoluzione automatica</span><span class="lbl-short">Auto-evo</span>
         </label>
         <span class="hint"><kbd>Spazio</kbd> pausa · <kbd>1</kbd>–<kbd>5</kbd> evolvi</span>
+        <button id="replay" title="Rivedi l'ultimo gol al rallentatore" hidden>🎬 Replay</button>
         <button id="sfx" class="icon-btn ${sfxEnabled() ? 'on' : ''}" title="Effetti sonori">🔊</button>
+        ${canVibrate() ? `<button id="vibe" class="icon-btn ${vibeEnabled() ? 'on' : ''}" title="Vibrazione">📳</button>` : ''}
         <button id="music" class="icon-btn ${musicEnabled() ? 'on' : ''}" title="Musica">🎵</button>
         <button id="quit" title="La partita non verrà conteggiata">Abbandona</button>
       </div>
@@ -122,6 +133,7 @@ export function runMatch(app: HTMLElement, teams: [TeamSetup, TeamSetup], cb: Ma
 
   bindThemeToggle(app);
   const canvas = document.getElementById('pitch') as HTMLCanvasElement;
+  canvas.onclick = () => replaying && stopReplay();
   const renderer = new Renderer(canvas, match, portrait);
   canvas.style.aspectRatio = `${renderer.width} / ${renderer.height}`;
 
@@ -133,6 +145,7 @@ export function runMatch(app: HTMLElement, teams: [TeamSetup, TeamSetup], cb: Ma
     const tag = EVENT_TAGS[e.kind];
     li.innerHTML = `<span class="min">${e.minute}'</span>${tag ? `<span class="chip chip-${tag[1]}">${tag[0]}</span>` : ''} ${esc(e.text)}`;
     logEl.prepend(li);
+    return li;
   };
   match.events.forEach(addLog);
   // suoni: ogni evento nuovo della cronaca ha il suo
@@ -150,10 +163,40 @@ export function runMatch(app: HTMLElement, teams: [TeamSetup, TeamSetup], cb: Ma
     }
     return null;
   };
+  // replay dei gol: ogni gol nella cronaca ha il suo ▶, il bottone in alto rivede l'ultimo
+  const recorder = new ReplayRecorder();
+  const replayBtn = document.getElementById('replay') as HTMLButtonElement;
+  let lastClip: Snapshot[] | null = null;
+  let replaying: { clip: Snapshot[]; start: number } | null = null;
+  const playReplay = (clip: Snapshot[]) => {
+    replaying = { clip, start: performance.now() };
+    replayBtn.textContent = '⏹ Fine replay';
+  };
+  const stopReplay = () => {
+    replaying = null;
+    renderer.replay = null;
+    replayBtn.textContent = '🎬 Replay';
+  };
+  replayBtn.onclick = () => (replaying ? stopReplay() : lastClip && playReplay(lastClip));
   match.onEvent = (e) => {
-    addLog(e);
+    const li = addLog(e);
     const s = soundFor(e);
-    if (s) playSfx(s);
+    if (s) {
+      playSfx(s);
+      vibrate(s);
+    }
+    if (e.kind === 'goal') {
+      recorder.goal((clip) => {
+        lastClip = clip;
+        replayBtn.hidden = false;
+        const b = document.createElement('button');
+        b.className = 'replay-btn';
+        b.title = 'Rivedi il gol al rallentatore';
+        b.textContent = '▶';
+        b.onclick = () => playReplay(clip);
+        li.append(b);
+      });
+    }
   };
   playSfx('kickoff');
   startMusic();
@@ -162,6 +205,13 @@ export function runMatch(app: HTMLElement, teams: [TeamSetup, TeamSetup], cb: Ma
     setSfx(!sfxEnabled());
     sfxBtn.classList.toggle('on', sfxEnabled());
   };
+  const vibeBtn = document.getElementById('vibe');
+  if (vibeBtn)
+    vibeBtn.onclick = () => {
+      setVibe(!vibeEnabled());
+      vibeBtn.classList.toggle('on', vibeEnabled());
+      vibrate('goalAgainst');
+    };
   const musicBtn = document.getElementById('music')!;
   musicBtn.onclick = () => {
     setMusic(!musicEnabled());
@@ -234,7 +284,8 @@ export function runMatch(app: HTMLElement, teams: [TeamSetup, TeamSetup], cb: Ma
   const onKey = (e: KeyboardEvent) => {
     if (e.code === 'Space') {
       e.preventDefault();
-      setPaused(!paused);
+      if (replaying) stopReplay();
+      else setPaused(!paused);
     }
     const n = Number(e.key);
     if (n >= 1 && n <= mine.length) match.evolve(mine[n - 1]);
@@ -362,10 +413,15 @@ export function runMatch(app: HTMLElement, teams: [TeamSetup, TeamSetup], cb: Ma
   const frame = (now: number) => {
     const elapsed = Math.min(0.1, (now - last) / 1000);
     last = now;
-    if (!paused) {
+    if (replaying) {
+      const t = (now - replaying.start) / 1000;
+      if (t >= clipDuration(replaying.clip)) stopReplay();
+      else renderer.replay = frameAt(replaying.clip, t);
+    } else if (!paused) {
       acc += elapsed * speed;
       while (acc >= DT && !match.finished) {
         match.step(DT);
+        recorder.tick(match, DT);
         acc -= DT;
       }
     }
@@ -373,8 +429,8 @@ export function runMatch(app: HTMLElement, teams: [TeamSetup, TeamSetup], cb: Ma
     updateHud();
     if (match.finished) {
       cleanup();
-      const { report, banner, offers } = cb.onFinish(match);
-      showPostMatch(app, match, humanTeam, report, banner, cb.onLeave, offers ?? [], cb.recruit, cb.roster);
+      const { report, banner, offers, achievements } = cb.onFinish(match);
+      showPostMatch(app, match, humanTeam, report, banner, cb.onLeave, offers ?? [], cb.recruit, cb.roster, achievements);
       return;
     }
     raf = requestAnimationFrame(frame);
@@ -396,8 +452,8 @@ export function skipMatch(app: HTMLElement, teams: [TeamSetup, TeamSetup], cb: M
   const humanTeam = teams[0].controlled ? 0 : 1;
   const match = new Match([{ ...teams[0], controlled: false }, { ...teams[1], controlled: false }], { knockout: cb.knockout });
   while (!match.finished) match.step(1 / 60);
-  const { report, banner, offers } = cb.onFinish(match);
-  showPostMatch(app, match, humanTeam, report, banner, cb.onLeave, offers ?? [], cb.recruit, cb.roster);
+  const { report, banner, offers, achievements } = cb.onFinish(match);
+  showPostMatch(app, match, humanTeam, report, banner, cb.onLeave, offers ?? [], cb.recruit, cb.roster, achievements);
 }
 
 /** Poké Ball accanto al nome se in rosa c'è già la stessa specie (come nel Pokédex dei giochi). */
@@ -410,6 +466,7 @@ function ownedBall(count: number): string {
 function showPostMatch(
   app: HTMLElement, match: Match, humanTeam: 0 | 1, report: ExpReport[], banner: MatchBanner | undefined, onLeave: () => void,
   offers: RecruitOffer[] = [], recruit?: MatchCallbacks['recruit'], roster?: MatchCallbacks['roster'],
+  achievements: Achievement[] = [],
 ) {
   const offerCards = offers.map((o, i) => {
     const sp = POKEDEX[o.inst.speciesKey];
@@ -426,8 +483,8 @@ function showPostMatch(
 
       </div>
       <div class="offer-actions">
-        <button class="primary" data-accept="${i}">Accetta</button>
-        <button data-decline="${i}">Lascia andare</button>
+        <button class="primary" data-accept="${i}">Cattura</button>
+        <button data-decline="${i}">Libera</button>
       </div>
     </div>`;
   }).join('');
@@ -492,8 +549,8 @@ function showPostMatch(
         <div>
           <b>${esc(r.name)}</b> ${r.played ? '' : '<span class="chip">riserva</span>'}
           <div class="exp-line">
-            ${up ? `<span class="chip chip-mint">Lv ${r.fromLevel} → ${r.toLevel}</span>` : `<small>Lv ${r.toLevel}</small>`}
-            <small class="muted">${r.capped && !up ? 'al tetto di livello' : `+${r.exp} exp`}</small>
+            ${up ? `<span class="chip chip-mint">sale al Lv. ${r.toLevel}!</span>` : `<small>Lv. ${r.toLevel}</small>`}
+            <small class="muted">${r.capped && !up ? 'al tetto di livello' : `+${r.exp} Punti Esp.`}</small>
           </div>
           <div class="bar exp"><i style="width:${r.expPct}%"></i></div>
           ${r.unlocked.length ? `<span class="chip chip-lilac">ora può evolvere in ${esc(r.unlocked.join(', '))}</span>` : ''}
@@ -510,9 +567,14 @@ function showPostMatch(
       ${themeToggleHtml()}
     </div>
     ${banner ? `<section class="card result-banner ${banner.badge ? 'won' : ''}" style="--team:${banner.color}">
-      ${banner.badge ? '<span class="badge-medal big"></span>' : ''}
+      ${banner.medal !== undefined ? medalHtml(banner.medal, true) : banner.badge ? '<span class="badge-medal big"></span>' : ''}
       <div><h2>${esc(banner.title)}</h2><p class="muted">${esc(banner.text)}</p></div>
     </section>` : ''}
+    ${achievements.map((a) => `<section class="card achievement-unlocked">
+      <span class="ach-icon">🏆</span>
+      <div><small class="muted">Obiettivo raggiunto · +${ACHIEVEMENT_SESSIONS} sessione di allenamento</small>
+      <h3>${esc(a.name)}</h3><p class="muted">${esc(a.description)}</p></div>
+    </section>`).join('')}
     <section class="card result-hero">
       <span class="chip ${verdict[1]}">${verdict[0]}</span>
       <div class="result-score">
@@ -536,8 +598,11 @@ function showPostMatch(
   bindThemeToggle(app);
   app.querySelectorAll<HTMLButtonElement>('[data-continue]').forEach((b) => (b.onclick = () => onLeave()));
   const joined = (i: number, released?: string) => {
+    const name = POKEDEX[offers[i].inst.speciesKey].name;
     app.querySelector(`[data-offer="${i}"] .offer-actions`)!.innerHTML =
-      `<span class="chip chip-mint">Si è unito alla squadra ✦</span>${released ? ` <small class="muted">${esc(released)} lasciato andare</small>` : ''}`;
+      released === BOX_LABEL
+        ? `<span class="chip chip-mint">Preso! ✦</span> <small class="muted">${esc(name)} è stato trasferito nel PC di Bill!</small>`
+        : `<span class="chip chip-mint">Preso! ✦</span>${released ? ` <small class="muted">${esc(released)} è stato trasferito nel PC di Bill!</small>` : ''}`;
   };
   app.querySelectorAll<HTMLButtonElement>('[data-accept]').forEach((b) => {
     b.onclick = () => {
@@ -547,20 +612,21 @@ function showPostMatch(
         if (recruit?.(offers[i].inst) !== false) joined(i);
         return;
       }
-      // rosa piena: si sceglie chi lasciare andare per fargli posto
+      // rosa piena: si sceglie chi va nel PC di Bill (anche lui stesso)
       const box = app.querySelector<HTMLElement>(`[data-offer="${i}"] .offer-actions`)!;
       const keep = box.innerHTML;
       box.classList.add('swap');
-      box.innerHTML = `<p class="swap-title">Rosa piena (${st.count}/${st.max}): chi lasci andare per fargli posto?</p>
-        <div class="swap-list">${st.releasable
+      box.innerHTML = `<p class="swap-title">Rosa piena (${st.count}/${st.max}): chi mandi nel PC di Bill?</p>
+        <div class="swap-list"><button data-release="${TO_BOX}">📦 Lui direttamente</button>${st.releasable
           .map((r) => `<button data-release="${r.uid}"><img src="${spriteUrl(POKEDEX[r.speciesKey].dex)}" alt=""> ${esc(r.name)} <small>Lv${r.level}</small></button>`)
           .join('')}</div>
         <button class="link" data-cancel>Annulla</button>`;
       box.querySelectorAll<HTMLButtonElement>('[data-release]').forEach((r) => {
         r.onclick = () => {
-          const out = st.releasable.find((x) => x.uid === r.dataset.release)!;
+          const uid = r.dataset.release!;
+          const out = uid === TO_BOX ? BOX_LABEL : st.releasable.find((x) => x.uid === uid)!.name;
           box.classList.remove('swap');
-          if (recruit?.(offers[i].inst, out.uid) !== false) joined(i, out.name);
+          if (recruit?.(offers[i].inst, uid) !== false) joined(i, out);
         };
       });
       box.querySelector<HTMLButtonElement>('[data-cancel]')!.onclick = () => {
@@ -568,7 +634,7 @@ function showPostMatch(
         box.innerHTML = keep;
         box.querySelector<HTMLButtonElement>('[data-accept]')!.onclick = b.onclick;
         box.querySelector<HTMLButtonElement>('[data-decline]')!.onclick = () => {
-          box.innerHTML = '<span class="chip">Lasciato andare</span>';
+          box.innerHTML = '<span class="chip">Liberato</span>';
         };
       };
     };
@@ -576,7 +642,7 @@ function showPostMatch(
   app.querySelectorAll<HTMLButtonElement>('[data-decline]').forEach((b) => {
     b.onclick = () => {
       const i = Number(b.dataset.decline);
-      app.querySelector(`[data-offer="${i}"] .offer-actions`)!.innerHTML = '<span class="chip">Lasciato andare</span>';
+      app.querySelector(`[data-offer="${i}"] .offer-actions`)!.innerHTML = '<span class="chip">Liberato</span>';
     };
   });
   window.scrollTo({ top: 0 });

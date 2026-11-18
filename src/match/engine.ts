@@ -333,7 +333,9 @@ export class Match {
     p.tally.evolutions++;
     this.recompute(p, true);
     p.hp = Math.min(p.maxHp, p.hp + p.maxHp * 0.25);
-    this.log('evo', `${from} si è evoluto in ${formName(p)}!`, p.team);
+    // come nei giochi: ai tuoi Pokémon i complimenti
+    const congrats = this.teams[p.team].controlled ? 'Congratulazioni! ' : '';
+    this.log('evo', `${congrats}${from} si è evoluto in ${formName(p)}!`, p.team);
     return true;
   }
 
