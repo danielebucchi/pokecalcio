@@ -10,6 +10,7 @@ import { SESSIONS_PER_PLACE, STARTER_POOL, autoBench, autoLineup, bestRating, ne
 import { createInstance } from '../src/game/stats';
 import { typeMultiplier } from '../src/game/typechart';
 import { buildGymTeam, clubTeam, simulateMatch } from '../src/match/teams';
+import { teachAll } from './teach';
 
 // prova: capipalestra più alti di GLV livelli con il tetto invariato, ed eventuale allenamento uguale per tutti
 if (process.env.GLV) { const b = Number(process.env.GLV); GYMS.forEach((g) => (g.level += b)); CAP.margin -= b; }
@@ -47,6 +48,8 @@ for (let g = 0; g < GYMS.length; g++) {
   save.roster = insts.sort((a, b) => bestRating(b) * Math.exp(edge(b.speciesKey)) - bestRating(a) * Math.exp(edge(a.speciesKey))).slice(0, 9);
   save.lineup = autoLineup(save);
   save.bench = autoBench(save);
+  // tecniche delle medaglie già vinte (i bonus alla squadra li aggiunge clubTeam)
+  if (!process.env.NOTECH) teachAll(save);
   let w = 0;
   let d = 0;
   for (let i = 0; i < N; i++) {

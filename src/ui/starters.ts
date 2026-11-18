@@ -25,7 +25,8 @@ function preview(key: string) {
  * Schermata d'inizio carriera: la prima squadra si sceglie per ruoli, 1 portiere su 5,
  * 2 difensori su 8 e 2 attaccanti su 8.
  */
-export function renderStarterPick(app: HTMLElement, onConfirm: (keys: string[]) => void) {
+export function renderStarterPick(app: HTMLElement, onConfirm: (keys: string[], clubName: string) => void) {
+  let clubName = 'Biancavilla FC';
   const picked: Record<GroupRole, string[]> = { POR: [], DIF: [], ATT: [] };
   const previews = Object.fromEntries(STARTER_GROUPS.flatMap((g) => g.pool).map((k) => [k, preview(k)]));
   const missing = () => STARTER_GROUPS.find((g) => picked[g.role].length < g.count);
@@ -98,6 +99,9 @@ export function renderStarterPick(app: HTMLElement, onConfirm: (keys: string[]) 
         <h2>Scegli la tua prima squadra <span class="sparkle">✦</span></h2>
         <p class="muted">Un <b>portiere</b>, due <b>difensori</b> e due <b>attaccanti</b>, tutti al livello ${STARTER_LEVEL}: saranno tutta la tua squadra, altri arriveranno più avanti con le catture.
         Tipi diversi ti aiutano contro le palestre: la prima è Brock, tipo Roccia.</p>
+        <label class="club-name">Nome della squadra
+          <input id="club-name" maxlength="24" value="${esc(clubName)}" placeholder="Biancavilla FC" autocomplete="off">
+        </label>
       </section>
       <nav class="st-steps">${steps}</nav>
       ${sections}
@@ -108,6 +112,9 @@ export function renderStarterPick(app: HTMLElement, onConfirm: (keys: string[]) 
       </div>`;
 
     bindThemeToggle(app);
+    // il nome si ricorda tra un ridisegno e l'altro (ogni scelta ridisegna la pagina)
+    const nameInput = document.getElementById('club-name') as HTMLInputElement;
+    nameInput.oninput = () => (clubName = nameInput.value);
     app.querySelectorAll<HTMLButtonElement>('[data-key]').forEach((b) => {
       b.onclick = () => {
         const role = b.dataset.role as GroupRole;
@@ -133,7 +140,7 @@ export function renderStarterPick(app: HTMLElement, onConfirm: (keys: string[]) 
         if (groupFull(step)) goTo(step + 1);
         return;
       }
-      if (!missing()) onConfirm(STARTER_GROUPS.flatMap((g) => picked[g.role]));
+      if (!missing()) onConfirm(STARTER_GROUPS.flatMap((g) => picked[g.role]), clubName.trim() || 'Biancavilla FC');
     };
   };
   const goTo = (i: number) => {

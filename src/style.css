@@ -360,8 +360,84 @@ td.best { color: var(--pink-deep); font-weight: 800; }
 .training-head { flex-wrap: wrap; align-items: flex-start; }
 .training-pools { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px 24px; flex: 1 1 520px; }
 .training-pools .session-dots { margin-bottom: 6px; }
-.session-dots.sparring i { border-color: var(--mint-deep); }
-.session-dots.sparring i.full { background: var(--mint-deep); }
+
+/* Pokédex */
+.pokedex summary { cursor: pointer; list-style: none; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.pokedex summary::-webkit-details-marker { display: none; }
+.pokedex summary::before { content: '▸'; color: var(--ink-mute); transition: transform 200ms var(--ease); }
+.pokedex[open] summary::before { transform: rotate(90deg); }
+.dex-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(64px, 1fr)); gap: 6px; margin: 10px 0 8px; }
+.dex-cell { position: relative; display: flex; flex-direction: column; align-items: center; padding: 4px 2px; border-radius: 12px; background: var(--track); }
+.dex-cell img { width: 48px; height: 48px; image-rendering: pixelated; filter: grayscale(1) opacity(0.45); }
+.dex-cell.caught { background: var(--lilac-soft); }
+.dex-cell.caught img { filter: none; }
+.dex-cell .owned-ball { position: absolute; top: 4px; right: 4px; width: 12px; height: 12px; }
+.dex-cell .owned-ball::after { width: 4px; height: 4px; }
+.dex-cell small { font-size: 0.62rem; color: var(--ink-mute); }
+
+/* statistiche della carriera */
+.career-stats summary, .pokedex summary { cursor: pointer; }
+.career-stats summary { list-style: none; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.career-stats summary::-webkit-details-marker { display: none; }
+.career-stats summary::before { content: '▸'; color: var(--ink-mute); transition: transform 200ms var(--ease); }
+.career-stats[open] summary::before { transform: rotate(90deg); }
+.stats-table { overflow-x: auto; margin-top: 10px; }
+.stats-table td:first-child { display: flex; align-items: center; gap: 6px; }
+.stats-table td:not(:first-child), .stats-table th:not(:first-child) { text-align: center; }
+.mini-sprite { width: 30px; height: 30px; image-rendering: pixelated; }
+.career-stats h4 { margin: 14px 0 6px; }
+.history { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 4px; }
+.history li { display: grid; grid-template-columns: 26px 1fr auto; gap: 8px; align-items: center; padding: 6px 10px; border-radius: 12px; background: var(--track); font-size: 0.86rem; }
+.h-res { width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; font-weight: 800; font-size: 0.7rem; color: var(--chip-ink); }
+.history .won .h-res { background: var(--mint); }
+.history .lost .h-res { background: var(--pink); }
+.career-line { display: block; font-size: 0.72rem; }
+
+/* soprannomi */
+.nick-btn { padding: 0 0.3rem; font-size: 0.9rem; text-decoration: none; }
+.nick-edit { display: inline-flex; gap: 4px; align-items: center; flex-wrap: wrap; }
+.nick-edit input, .club-name input { background: var(--input-bg); color: var(--ink); border: 1px solid var(--line-strong); border-radius: 10px;
+  padding: 0.35rem 0.6rem; font: 600 0.9rem 'Manrope', sans-serif; width: 9.5em; }
+.nick-edit input:focus, .club-name input:focus { outline: none; border-color: var(--pink-deep); }
+.nick-edit button { padding: 0.35rem 0.7rem; font-size: 0.76rem; }
+.club-name { display: flex; flex-direction: column; gap: 6px; margin-top: 12px; font-weight: 700; }
+.club-name input { width: min(320px, 100%); font-size: 1rem; padding: 0.55rem 0.8rem; }
+
+/* tecniche delle medaglie (MT): una riga, si apre a richiesta */
+.techniques { margin-bottom: 12px; padding: 10px 16px; }
+.techniques summary { cursor: pointer; list-style: none; display: flex; align-items: center; gap: 8px; }
+.techniques summary::-webkit-details-marker { display: none; }
+.techniques summary::before { content: '▸'; color: var(--ink-mute); transition: transform 200ms var(--ease); }
+.techniques[open] summary::before { transform: rotate(90deg); }
+.techniques[open] summary { margin-bottom: 6px; }
+.tech-list { display: flex; flex-direction: column; }
+.technique { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 4px 0; font-size: 0.84rem; }
+.technique + .technique { border-top: 1px solid var(--line-faint); }
+.technique.locked { opacity: 0.5; }
+.technique .chip { font-size: 0.6rem; padding: 0.15rem 0.5rem; }
+.tech-body { display: flex; align-items: baseline; gap: 8px; min-width: 0; flex: 1; }
+.tech-body small { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.technique { flex-wrap: wrap; }
+.technique > button { padding: 0.45rem 0.9rem; font-size: 0.8rem; }
+/* scelta del Pokémon a cui insegnarla: griglia di tessere grandi, poi conferma */
+.teach-grid { flex-basis: 100%; display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 8px; margin: 6px 0 8px; }
+.teach-pick { flex-direction: column; gap: 2px; padding: 8px 6px; border-radius: 16px; font-weight: 500; white-space: normal; text-align: center; }
+.teach-pick img { width: 48px; height: 48px; image-rendering: pixelated; }
+.teach-pick b { font-family: 'Fredoka', sans-serif; font-weight: 600; font-size: 0.86rem; }
+.teach-pick small { display: flex; gap: 4px; align-items: center; font-size: 0.68rem; }
+.teach-pick .role { font-size: 0.55rem; padding: 0.05rem 0.35rem; }
+.teach-confirm { flex-basis: 100%; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 6px 0 8px; padding: 10px 12px;
+  border-radius: 16px; background: var(--lilac-soft); }
+.teach-confirm img { width: 48px; height: 48px; image-rendering: pixelated; }
+.teach-confirm > span { display: flex; flex-direction: column; flex: 1 1 180px; }
+.techniques > small { display: block; margin-top: 6px; font-size: 0.72rem; }
+@media (max-width: 700px) {
+  .tech-body { flex-direction: column; gap: 0; }
+  .tech-body small { white-space: normal; font-size: 0.72rem; }
+  .technique > button { padding: 0.6rem 1rem; }
+  .teach-grid { grid-template-columns: repeat(3, 1fr); }
+  .teach-confirm button { flex: 1; padding: 0.7rem; }
+}
 
 /* sfide e medaglie */
 .badge-case { margin-bottom: 16px; }
@@ -397,12 +473,50 @@ td.best { color: var(--pink-deep); font-weight: 800; }
 .result-banner p { margin: 0; }
 .result-banner.won { box-shadow: 0 18px 44px -16px var(--team); }
 
+/* missioni */
+.mission-now { border-left: 6px solid var(--team); margin-bottom: 14px; box-shadow: 0 18px 44px -20px var(--team); }
+.mission-now h2 { margin: 4px 0 6px; }
+.mission-now p { margin: 0 0 8px; }
+.mission-tips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 4px; }
+.missions-grid { display: grid; grid-template-columns: 1fr; gap: 14px; }
+.missions-grid h3 { margin: 0 0 4px; }
+.ms-progress { display: flex; align-items: center; gap: 12px; margin-top: 14px; padding-top: 12px; border-top: 1px dashed var(--line-strong); font-weight: 700; }
+.ms-progress .bar { flex: 1; height: 10px; margin: 0; }
+.ms-progress .bar i { background: var(--grad-primary); }
+.ms-progress b { font: 600 1.2rem 'Fredoka', sans-serif; color: var(--pink-deep); }
+.ms-side { display: flex; flex-direction: column; gap: 12px; margin-top: 10px; }
+.ms-side > div { display: flex; flex-direction: column; gap: 4px; }
+.ms-side-head { display: flex; justify-content: space-between; align-items: center; }
+.ms-side .bar i { background: var(--grad-primary); }
+.ms-side .done .bar i { background: var(--mint-deep); }
+.ms-prize { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.ms-prize .chip { font-size: 0.64rem; }
+.ms-prize .swap-list button { flex: 0 1 auto; padding: 0.3rem 0.7rem 0.3rem 0.3rem; font-size: 0.8rem; gap: 4px; }
+.ms-prize .swap-list img { width: 30px; height: 30px; image-rendering: pixelated; }
+
+/* eventi dei luoghi (Pokémon regalati) */
+.event { border-left: 6px solid var(--star-deep); }
+.event h3 { margin: 2px 0 4px; }
+.event p { margin: 0 0 8px; }
+.event { animation: event-in 600ms var(--ease); }
+@keyframes event-in { from { opacity: 0; transform: translateY(8px); } }
+.events-found { margin-left: 4px; }
+.event-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.event-play { display: inline-flex; gap: 6px; flex-wrap: wrap; }
+
 /* leggendari */
 .legendary { box-shadow: 0 18px 44px -18px rgba(232, 163, 23, 0.6); }
 .legend-sprite { width: 96px; height: 96px; image-rendering: pixelated; filter: drop-shadow(0 6px 10px rgba(232, 163, 23, 0.5)); }
 
 /* penalità di sconfitta o pareggio nel resoconto */
 .penalty { margin: 6px 0 0; padding: 6px 12px; border-radius: 999px; display: inline-block; background: color-mix(in srgb, var(--pink, #f4a6c0) 22%, transparent); font-weight: 600; }
+
+/* Poké Ball: specie che hai già in rosa */
+.owned-ball { display: inline-block; width: 16px; height: 16px; border-radius: 50%; vertical-align: -2px; position: relative; flex: none;
+  background: linear-gradient(#e5484d 0 44%, #2b2238 44% 56%, #fff 56%); border: 1.5px solid #2b2238; box-shadow: var(--shadow-sm); }
+.owned-ball::after { content: ''; position: absolute; left: 50%; top: 50%; width: 5px; height: 5px; transform: translate(-50%, -50%);
+  border-radius: 50%; background: #fff; border: 1.5px solid #2b2238; }
+.owned-count { font-size: 0.7rem; font-weight: 700; }
 
 /* reclutamento dopo la partitella */
 .offers { margin-bottom: 14px; border-left: 6px solid var(--mint-deep); }
@@ -504,7 +618,10 @@ td.best { color: var(--pink-deep); font-weight: 800; }
 @keyframes km-new-bob { 50% { transform: translateY(-2px); } }
 
 /* luoghi come schede (telefono): sul desktop c'è la mappa disegnata */
-.travel { display: none; border: 2px solid var(--pink-deep); box-shadow: var(--shadow-glow-pink); }
+.travel { border: 2px solid var(--pink-deep); box-shadow: var(--shadow-glow-pink); }
+/* le schede dei luoghi sostituiscono i pulsantini "Vai a" anche sul desktop; la mappa è sempre visibile */
+.loc-head .destinations { display: none; }
+#toggle-map { display: none; }
 .travel-head h3 { font-size: 1.25rem; }
 .trainers-done summary { cursor: pointer; list-style: none; display: flex; align-items: center; gap: 8px; }
 .trainers-done summary::-webkit-details-marker { display: none; }
@@ -698,7 +815,7 @@ canvas { width: auto; height: auto; max-width: 100%; max-height: calc(100vh - 32
   .tabs { position: fixed; left: 0; right: 0; bottom: 0; z-index: 20; margin: 0; gap: 6px; flex-wrap: nowrap;
     padding: 8px 10px calc(8px + env(safe-area-inset-bottom)); background: var(--surface); backdrop-filter: blur(14px);
     border-top: 1px solid var(--line); box-shadow: 0 -10px 30px -18px rgba(0, 0, 0, 0.35); }
-  .tabs button { flex: 1; padding: 0.7rem 0.4rem; font-size: 0.82rem; }
+  .tabs button { flex: 1; padding: 0.7rem 0.3rem; font-size: 0.76rem; gap: 4px; }
   .hub-foot { margin-top: 18px; }
 
   /* formazione */
@@ -712,6 +829,9 @@ canvas { width: auto; height: auto; max-width: 100%; max-height: calc(100vh - 32
   .pick-stats { gap: 6px; flex-wrap: wrap; }
   .pick-rating b { font-size: 1.25rem; }
 
+  /* missioni */
+  .missions-grid { grid-template-columns: 1fr; }
+
   /* allenamento */
   .tgrid { grid-template-columns: 1fr; gap: 10px; }
   .tcard:hover { transform: none; }
@@ -719,8 +839,7 @@ canvas { width: auto; height: auto; max-width: 100%; max-height: calc(100vh - 32
   .drills button { padding: 0.55rem 0.7rem; }
 
   /* mappa: nascosta, al suo posto i luoghi come schede; se la apri è più larga dello schermo e scorre */
-  .travel { display: block; }
-  .loc-head .destinations { display: none; }
+  #toggle-map { display: inline-flex; }
   .kanto:not(.show-map) .map-card { display: none; }
   .map-card { overflow-x: auto; padding: 8px; -webkit-overflow-scrolling: touch; }
   .kanto-map { min-width: 760px; }

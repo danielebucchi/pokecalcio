@@ -53,7 +53,7 @@ export const GYMS: Gym[] = [
     pool: ['barboach', 'wimpod', 'tentacool', 'dracovish', 'tatsugiri', 'qwilfish', 'lotad', 'chinchou', 'numel'],
   },
   {
-    leader: 'Lt. Surge', city: 'Aranciopoli', type: 'electric', badge: 'Medaglia Tuono', level: 38, color: '#e8a317', training: 1, extraLevels: 1,
+    leader: 'Lt. Surge', city: 'Aranciopoli', type: 'electric', badge: 'Medaglia Tuono', level: 38, color: '#e8a317', training: 0.9, extraLevels: 1,
     formation: 'rombo', signature: 'pikachu', counter: 'spheal',
     // Rosso/Blu: Voltorb, Pikachu, Raichu
     // contro chi porta tanti Terra: Chinchou (Acqua), Wattrel ed Emolga (Volante, immuni) e Spheal (la contromossa)
@@ -66,25 +66,25 @@ export const GYMS: Gym[] = [
     pool: ['bellsprout', 'tangela', 'ferroseed', 'lileep', 'lotad', 'snover', 'rowlet', 'toedscool', 'roggenrola'],
   },
   {
-    leader: 'Koga', city: 'Fucsiapoli', type: 'poison', badge: 'Medaglia Anima', level: 48, color: '#a890d8', training: 0.5,
+    leader: 'Koga', city: 'Fucsiapoli', type: 'poison', badge: 'Medaglia Anima', level: 48, color: '#a890d8', training: 0.5, extraLevels: 3,
     formation: 'quadrato', signature: 'koffing', counter: 'sneasel',
     // Rosso/Blu: Koffing, Muk, Koffing, Weezing
     pool: ['grimer', 'stunky', 'zubat', 'varoom', 'bulbasaur', 'tentacool', 'oddish', 'qwilfish', 'sneasel'],
   },
   {
-    leader: 'Sabrina', city: 'Zafferanopoli', type: 'psychic', badge: 'Medaglia Palude', level: 53, color: '#c77dd8', training: 0.65,
+    leader: 'Sabrina', city: 'Zafferanopoli', type: 'psychic', badge: 'Medaglia Palude', level: 53, color: '#c77dd8', training: 0.65, extraLevels: 4,
     formation: 'rombo', signature: 'abra', counter: 'venonat',
     // Rosso/Blu: Kadabra, Mr. Mime, Venomoth, Alakazam
     pool: ['mr-mime', 'venonat', 'staryu', 'stantler', 'beldum', 'blipbug', 'fennekin', 'baltoy', 'inkay'],
   },
   {
-    leader: 'Blaine', city: 'Isola Cannella', type: 'fire', badge: 'Medaglia Vulcano', level: 58, color: '#f08a5d', training: 0.85,
+    leader: 'Blaine', city: 'Isola Cannella', type: 'fire', badge: 'Medaglia Vulcano', level: 58, color: '#f08a5d', training: 0.85, extraLevels: 4,
     formation: 'rombo', signature: 'growlithe', counter: 'turtwig',
     // Rosso/Blu: Growlithe, Ponyta, Rapidash, Arcanine
     pool: ['ponyta', 'capsakid', 'rolycoly', 'fletchling', 'numel', 'oricorio', 'turtonator', 'larvesta', 'turtwig'],
   },
   {
-    leader: 'Giovanni', city: 'Smeraldopoli', type: 'ground', badge: 'Medaglia Terra', level: 63, color: '#c49a5a', training: 0.8,
+    leader: 'Giovanni', city: 'Smeraldopoli', type: 'ground', badge: 'Medaglia Terra', level: 63, color: '#c49a5a', training: 0.8, extraLevels: 5,
     formation: 'quadrato', signature: 'rhyhorn', counter: 'houndour',
     // Rosso/Blu: Rhyhorn, Dugtrio, Nidoqueen, Nidoking, Rhydon
     pool: ['diglett', 'nidoran-f', 'nidoran-m', 'mudkip', 'turtwig', 'tympole', 'nincada', 'shellos', 'houndour'],

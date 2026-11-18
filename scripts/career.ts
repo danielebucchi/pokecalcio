@@ -1,5 +1,6 @@
 // Simula carriere complete sulla mappa di Kanto (CPU per entrambe le squadre) per tarare la progressione:
 import { writeFileSync } from 'fs';
+import { teachAll } from './teach';
 // allenatori dei percorsi in ordine → palestra → se perdi, allenatore di passaggio e riprovi.
 // npm run career -- 10
 import { GYMS } from '../src/game/gyms';
@@ -9,8 +10,8 @@ import { DEFAULT_STARTERS, ROSTER_MAX, addToRoster, arriveAt, autoBench, autoLin
 import { recruitOffers } from '../src/game/recruit';
 import { FORMATIONS } from '../src/game/formations';
 import { Match, type TeamSetup } from '../src/match/engine';
-import { TUNING, buildGymTeam, buildLeagueTeam, buildTrainerTeam, buildWildTeam, clubTeam } from '../src/match/teams';
-import { LEAGUE } from '../src/game/league';
+import { TUNING, buildChampionTeam, buildGymTeam, buildLeagueTeam, buildTrainerTeam, buildWildTeam, clubTeam } from '../src/match/teams';
+import { CHAMPION_ID, LEAGUE } from '../src/game/league';
 // override dell'allenamento delle palestre: GYM='[0.3,0.6,…]'
 if (process.env.GYM) (JSON.parse(process.env.GYM) as number[]).forEach((t, i) => (GYMS[i].training = t));
 if (process.env.CAPM) CAP.margin = Number(process.env.CAPM);
@@ -35,15 +36,15 @@ const startersAvg = (save: SaveData) =>
 
 function play(save: SaveData, opponent: TeamSetup, kind: Kind): boolean {
   const roles = FORMATIONS[save.formation].slots;
-  for (let tries = 0; (save.sessionsLeft > 0 || save.sparringLeft > 0) && tries < 20; tries++) {
+  for (let tries = 0; save.sessionsLeft > 0 && tries < 20; tries++) {
     const i = Math.floor(Math.random() * save.lineup.length);
     const p = findOwned(save, save.lineup[i])!;
     const d = suggestedDrill(roles[i].role);
     if (!drillBlock(save, p, d)) applyDrill(save, p, d);
-    else if (!drillBlock(save, p, 'sparring')) applyDrill(save, p, 'sparring');
   }
   save.lineup = autoLineup(save);
   save.bench = autoBench(save);
+  if (!process.env.NOTECH) teachAll(save);
   const home = clubTeam(save);
   home.controlled = false;
   const m = new Match([home, opponent], { knockout: kind === 'lega' || kind === 'palestra' });
@@ -84,7 +85,7 @@ for (let c = 0; c < CAREERS; c++) {
           if (play(save, buildTrainerTeam(loc, t), 'percorso')) break;
           // persa: una partitella con i selvatici del posto prima di riprovare
           played++;
-          play(save, buildWildTeam(loc, startersAvg(save)), 'selvatici');
+          if (!process.env.NOGRIND) play(save, buildWildTeam(loc, startersAvg(save)), 'selvatici');
         }
       }
     }
@@ -103,7 +104,7 @@ for (let c = 0; c < CAREERS; c++) {
       // persa: una partitella con i selvatici prima di riprovare
       played++;
       grind++;
-      play(save, buildWildTeam(city, startersAvg(save)), 'selvatici');
+      if (!process.env.NOGRIND) play(save, buildWildTeam(city, startersAvg(save)), 'selvatici');
     }
     save.badges = g + 1; // alza il tetto di livello come nel gioco
     stats[g].tries.push(tries);
@@ -117,7 +118,7 @@ for (let c = 0; c < CAREERS; c++) {
         played++;
         if (play(save, buildTrainerTeam(loc, t), 'percorso')) break;
         played++;
-        play(save, buildWildTeam(loc, startersAvg(save)), 'selvatici');
+        if (!process.env.NOGRIND) play(save, buildWildTeam(loc, startersAvg(save)), 'selvatici');
       }
     }
   }
@@ -128,11 +129,13 @@ for (let c = 0; c < CAREERS; c++) {
   let won = false;
   while (!won && played < MAX_MATCHES) {
     attempts++;
-    const field = [...LEAGUE].sort(() => Math.random() - 0.5).slice(0, 3);
+    const field = LEAGUE.filter((t) => t.id !== CHAMPION_ID).sort(() => Math.random() - 0.5).slice(0, 3);
     won = field.every((t) => (played++, play(save, buildLeagueTeam(t, clubTeam(save)), 'lega')));
+    // poi il Campione Blu
+    if (won) won = (played++, play(save, buildChampionTeam(LEAGUE.find((t) => t.id === CHAMPION_ID)!, clubTeam(save)), 'lega'));
     if (!won) {
       played++;
-      play(save, buildWildTeam(plateau, startersAvg(save)), 'selvatici');
+      if (!process.env.NOGRIND) play(save, buildWildTeam(plateau, startersAvg(save)), 'selvatici');
     }
   }
   league.attempts.push(won ? attempts : NaN);
