@@ -433,6 +433,23 @@ td.best { color: var(--pink-deep); font-weight: 800; }
 .st-slot.filled { border: 2px solid var(--pink-deep); background: var(--lilac-soft); }
 .st-slot img { width: 48px; height: 48px; image-rendering: pixelated; }
 .st-info { flex: 1; display: flex; flex-direction: column; gap: 2px; }
+/* gruppi per ruolo */
+.st-group { margin-top: 18px; }
+.st-group h3 { margin: 0 0 2px; display: flex; align-items: center; gap: 8px; }
+.st-group > p { margin: 0 0 10px; }
+.st-group .starter-grid { margin: 0; }
+.st-group:last-of-type .starter-grid { margin-bottom: 120px; }
+.st-role b { color: var(--pink-deep); font-size: 0.95rem; }
+.st-rating { width: 70px; display: inline-block; margin: 0 0 0 4px; vertical-align: middle; }
+.st-rating i { background: var(--grad-primary); }
+.st-slot { position: relative; flex-direction: column; }
+/* passi della scelta (solo telefono) */
+.st-steps { display: none; }
+.st-step { flex: 1; padding: 0.55rem 0.4rem; font-size: 0.78rem; gap: 6px; }
+.st-step span { display: inline-grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; background: var(--track); font-size: 0.7rem; font-weight: 800; }
+.st-step.done span { background: var(--mint-deep); color: #fff; }
+.st-step.on { background: var(--on-bg); color: var(--on-fg); border-color: var(--on-bg); }
+.st-slot .role { position: absolute; bottom: -7px; left: 50%; transform: translateX(-50%); font-size: 0.52rem; padding: 0.05rem 0.35rem; }
 .st-info b { font: 600 1.2rem 'Fredoka', sans-serif; }
 
 /* mappa di Kanto */
@@ -720,7 +737,13 @@ canvas { width: auto; height: auto; max-width: 100%; max-height: calc(100vh - 32
   .badge-slot b { font-size: 0.8rem; }
 
   /* scelta della prima squadra */
-  .starter-grid { grid-template-columns: 1fr; margin-bottom: 150px; }
+  .starter-grid { grid-template-columns: 1fr; }
+  .st-steps { display: flex; gap: 6px; position: sticky; top: 0; z-index: 6; padding: 8px 0; margin-top: 4px;
+    background: linear-gradient(var(--bg) 70%, transparent); }
+  .st-group { display: none; margin-top: 6px; }
+  .st-group.current { display: block; }
+  .st-group.current .starter-grid { margin-bottom: 160px; }
+  .welcome p { font-size: 0.88rem; }
   .st-bar { bottom: 8px; width: calc(100% - 16px); padding: 10px 12px; gap: 10px; }
   .st-slots { gap: 4px; }
   .st-slot { width: 40px; height: 40px; border-radius: 12px; }
