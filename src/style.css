@@ -629,7 +629,9 @@ td.best { color: var(--pink-deep); font-weight: 800; }
 .mini-team { display: flex; gap: 2px; margin-top: 4px; }
 .mini-team img { width: 34px; height: 34px; image-rendering: pixelated; background: var(--lilac-soft); border-radius: 10px; }
 .wild { display: flex; flex-wrap: wrap; gap: 6px; }
-.wild-mon { display: flex; flex-direction: column; align-items: center; width: 64px; }
+.wild-mon { position: relative; display: flex; flex-direction: column; align-items: center; width: 64px; }
+.wild-mon .owned-ball { position: absolute; top: 2px; right: 4px; width: 12px; height: 12px; }
+.wild-mon .owned-ball::after { width: 4px; height: 4px; }
 .wild-mon img { width: 52px; height: 52px; image-rendering: pixelated; background: var(--mint-soft); border-radius: 14px; }
 .wild-mon small { font-size: 0.7rem; text-align: center; }
 .wild-match { display: flex; justify-content: space-between; align-items: center; gap: 12px; border-left: 6px solid var(--mint-deep); }
