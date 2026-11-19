@@ -16,6 +16,8 @@ export interface PokemonInstance {
   technique?: TechniqueId;
   /** Soprannome dato dall'allenatore (vuoto = nome della specie). */
   nickname?: string;
+  /** Shiny: colori rari, solo da collezione (le statistiche sono le stesse). */
+  shiny?: boolean;
 }
 
 /** Le 4 statistiche del gioco: tra fisico e speciale si prende il valore più alto. */

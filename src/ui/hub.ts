@@ -1,3 +1,8 @@
+import { dailyPlan } from '../game/daily';
+import { exportTeam } from '../game/friendCode';
+import { WEATHER, weatherText } from '../game/weather';
+import { AUTO_EVO_KEY, CLUB_COLORS, SPEEDS, SPEED_KEY, resetCoach, savedSpeed } from './settings';
+import { canVibrate, musicEnabled, setSfx, setVibe, sfxEnabled, vibeEnabled } from './sound';
 import { installMode, promptInstall } from './pwa';
 import { matchupRows, suggestedLineup } from '../game/matchup';
 import { whereToFind } from '../game/dexGuide';
@@ -27,7 +32,7 @@ import { SIDE_MISSIONS, claimReward, missionComplete, rewardLabel } from '../gam
 import { BADGE_BONUS, BADGE_BONUS_PCT, TECHNIQUES, techniqueById, type TechniqueId } from '../game/techniques';
 import { esc, evoLine, teamTable } from './common';
 import { medalHtml, spriteUrl } from './sprites';
-import { bindThemeToggle, themeToggleHtml } from './theme';
+import { bindThemeToggle, currentTheme, setTheme, themeToggleHtml } from './theme';
 
 export type HubTab = 'squad' | 'training' | 'map' | 'missions';
 
@@ -64,6 +69,9 @@ export interface HubState {
   slot: number;
   /** Pokémon che stai per lasciare andare (aspetta il secondo tocco). */
   releasing?: string | null;
+  /** Amichevole: il codice dell'amico incollato e l'eventuale errore. */
+  friendCode?: string;
+  friendError?: string | null;
   /** Ordine e filtro per tipo di tribuna e PC di Bill. */
   sort?: RosterSort;
   typeFilter?: PokeType | '';
@@ -76,7 +84,7 @@ export interface HubState {
   /** Pokémon a cui stai dando un soprannome (uid). */
   renaming?: string | null;
   /** Pannello esporta/importa salvataggio aperto. */
-  savePanel?: 'export' | 'import' | null;
+  savePanel?: 'export' | 'import' | 'settings' | null;
   importCode?: string;
   importConfirm?: boolean;
   importError?: string | null;
@@ -94,6 +102,10 @@ export interface HubActions {
   reset(): void;
   /** Importa un codice di salvataggio: null se è andato bene, altrimenti il motivo. */
   importSave(code: string): string | null;
+  /** Sfida del giorno. */
+  playDaily(skip?: boolean): void;
+  /** Amichevole contro la squadra di un amico (codice): null se parte, altrimenti il motivo. */
+  playFriendly(code: string, skip?: boolean): string | null;
 }
 
 const WELCOME_KEY = 'pokecalcio-welcome-seen';
@@ -114,9 +126,9 @@ export const STAT_HELP = {
 };
 
 const STAT_NAMES: Record<Drill, string> = { att: 'Attacco', dif: 'Difesa', vel: 'Velocità', pv: 'PV' };
-const sprite = (p: PokemonInstance) => spriteUrl(POKEDEX[p.speciesKey].dex);
+const sprite = (p: PokemonInstance) => spriteUrl(POKEDEX[p.speciesKey].dex, p.shiny);
 /** Nome da mostrare: il soprannome se c'è, altrimenti la specie. */
-const nameOf = (p: PokemonInstance) => esc(plainName(p));
+const nameOf = (p: PokemonInstance) => esc(plainName(p)) + (p.shiny ? ' <span class="shiny-star" title="Shiny">✨</span>' : '');
 /** Nome senza escape, per i messaggi (che vengono escapati quando si mostrano). */
 const plainName = (p: PokemonInstance) => p.nickname || POKEDEX[p.speciesKey].name;
 
@@ -187,6 +199,7 @@ export function renderHub(app: HTMLElement, save: SaveData, ch: Challenges, stat
     <main id="tab"></main>
     <footer class="hub-foot">
       ${savePanelHtml(save, state)}
+      <button class="link" data-save-panel="settings">⚙️ Impostazioni</button>
       <button class="link" data-save-panel="export">Esporta salvataggio</button>
       <button class="link" data-save-panel="import">Importa salvataggio</button>
       ${installMode() ? '<button class="link" data-install-again>Installa l\'app</button>' : ''}
@@ -241,7 +254,7 @@ export function renderHub(app: HTMLElement, save: SaveData, ch: Challenges, stat
   });
   app.querySelectorAll<HTMLButtonElement>('[data-save-panel]').forEach((b) => {
     b.onclick = () => {
-      const which = b.dataset.savePanel as 'export' | 'import';
+      const which = b.dataset.savePanel as 'export' | 'import' | 'settings';
       state.savePanel = state.savePanel === which ? null : which;
       // esportata a mano: il promemoria aspetta la prossima medaglia
       if (state.savePanel === 'export' && save.badges > (save.backupBadges ?? 0)) {
@@ -255,6 +268,48 @@ export function renderHub(app: HTMLElement, save: SaveData, ch: Challenges, stat
       renderHub(app, save, ch, state, actions);
       app.querySelector('.save-panel')?.scrollIntoView({ block: 'center' });
     };
+  });
+  // impostazioni
+  const reopen = () => {
+    renderHub(app, save, ch, state, actions);
+    app.querySelector('.save-panel')?.scrollIntoView({ block: 'center' });
+  };
+  app.querySelectorAll<HTMLButtonElement>('[data-club-color]').forEach((b) => {
+    b.onclick = () => {
+      save.color = b.dataset.clubColor!;
+      actions.changed();
+      app.querySelector('.save-panel')?.scrollIntoView({ block: 'center' });
+    };
+  });
+  app.querySelector<HTMLInputElement>('[data-club-color-custom]')?.addEventListener('change', (e) => {
+    save.color = (e.target as HTMLInputElement).value;
+    actions.changed();
+    app.querySelector('.save-panel')?.scrollIntoView({ block: 'center' });
+  });
+  app.querySelectorAll<HTMLButtonElement>('[data-set-theme]').forEach((b) => {
+    b.onclick = () => {
+      setTheme(b.dataset.setTheme as 'light' | 'dark');
+      reopen();
+    };
+  });
+  app.querySelectorAll<HTMLButtonElement>('[data-set-speed]').forEach((b) => {
+    b.onclick = () => {
+      localStorage.setItem(SPEED_KEY, b.dataset.setSpeed!);
+      reopen();
+    };
+  });
+  app.querySelectorAll<HTMLInputElement>('[data-setting]').forEach((c) => {
+    c.onchange = () => {
+      const on = c.checked;
+      if (c.dataset.setting === 'sfx') setSfx(on);
+      else if (c.dataset.setting === 'music') localStorage.setItem('pokecalcio-music', on ? '1' : '0');
+      else if (c.dataset.setting === 'vibe') setVibe(on);
+      else if (c.dataset.setting === 'autoevo') localStorage.setItem(AUTO_EVO_KEY, on ? '1' : '0');
+    };
+  });
+  app.querySelector<HTMLButtonElement>('[data-reset-coach]')?.addEventListener('click', (e) => {
+    resetCoach();
+    (e.currentTarget as HTMLButtonElement).textContent = 'Fatto: li rivedrai alla prossima partita ✓';
   });
   app.querySelector<HTMLButtonElement>('[data-copy-save]')?.addEventListener('click', async (e) => {
     const btn = e.currentTarget as HTMLButtonElement;
@@ -389,11 +444,13 @@ function renderMissions(main: HTMLElement, save: SaveData, state: HubState, acti
       </div>
     </section>
     ${state.message ? `<div class="toast">${esc(state.message)}</div>` : ''}
+    ${extraHtml(save, state)}
     <div class="missions-grid">
       <details class="card fold side-missions" ${SIDE_MISSIONS.some((m) => missionComplete(save, m) && !save.rewards.includes(m.id)) ? 'open' : ''}>
         <summary><b>Missioni facoltative</b> <small class="muted">${SIDE_MISSIONS.filter((m) => save.rewards.includes(m.id)).length}/${SIDE_MISSIONS.length} premi ritirati</small></summary>
         <div class="ms-side">${sideRows}</div>
       </details>
+      ${hallOfFameHtml(save)}
       ${achievementsHtml(save)}
       ${pokedexHtml(save)}
       ${careerStatsHtml(save)}
@@ -412,6 +469,33 @@ function renderMissions(main: HTMLElement, save: SaveData, state: HubState, acti
     };
   });
 
+  // sfida del giorno e amichevole
+  main.querySelectorAll<HTMLButtonElement>('[data-daily]').forEach((b) => {
+    b.onclick = () => actions.playDaily(b.dataset.daily === 'skip');
+  });
+  main.querySelector<HTMLButtonElement>('[data-copy-team]')?.addEventListener('click', async (e) => {
+    const btn = e.currentTarget as HTMLButtonElement;
+    const area = main.querySelector<HTMLTextAreaElement>('[data-team-code]')!;
+    try {
+      await navigator.clipboard.writeText(area.value);
+    } catch {
+      area.select();
+      document.execCommand('copy');
+    }
+    btn.textContent = 'Copiato ✓';
+  });
+  main.querySelector<HTMLTextAreaElement>('[data-friend-code]')?.addEventListener('input', (e) => {
+    state.friendCode = (e.target as HTMLTextAreaElement).value;
+  });
+  main.querySelectorAll<HTMLButtonElement>('[data-friendly]').forEach((b) => {
+    b.onclick = () => {
+      const err = actions.playFriendly(state.friendCode ?? '', b.dataset.friendly === 'skip');
+      if (err) {
+        state.friendError = err;
+        renderMissions(main, save, state, actions);
+      } else state.friendError = null;
+    };
+  });
   // titolo del club: uno degli obiettivi raggiunti (toccando di nuovo lo si toglie)
   main.querySelectorAll<HTMLButtonElement>('[data-title]').forEach((b) => {
     b.onclick = () => {
@@ -445,8 +529,34 @@ function renderMissions(main: HTMLElement, save: SaveData, state: HubState, acti
   });
 }
 
+/** Impostazioni: colore del club, tema, suoni, velocità ed evoluzione automatica, fumetti guida. */
+function settingsHtml(save: SaveData): string {
+  const toggle = (key: string, label: string, on: boolean) =>
+    `<label class="set-toggle"><input type="checkbox" data-setting="${key}" ${on ? 'checked' : ''}> ${label}</label>`;
+  return `<section class="card save-panel settings">
+    <h3>Impostazioni</h3>
+    <div class="set-row"><b>Colore del club</b>
+      <div class="swatches">${CLUB_COLORS.map(([c, n]) => `<button class="swatch ${save.color === c ? 'on' : ''}" data-club-color="${c}" title="${n}" style="--c:${c}"></button>`).join('')}
+        <label class="swatch custom" title="Un altro colore" style="--c:${save.color}"><input type="color" value="${save.color}" data-club-color-custom></label></div>
+      <small class="muted">È il colore della tua squadra in campo e nell'intestazione. Se l'avversario ne ha uno troppo simile, in partita lui ne usa un altro.</small></div>
+    <div class="set-row"><b>Tema</b>
+      <div class="seg"><button data-set-theme="light" class="${currentTheme() === 'light' ? 'on' : ''}">Chiaro</button><button data-set-theme="dark" class="${currentTheme() === 'dark' ? 'on' : ''}">Scuro</button></div></div>
+    <div class="set-row"><b>Suoni</b>
+      ${toggle('sfx', 'Effetti sonori', sfxEnabled())}
+      ${toggle('music', 'Musica in partita', musicEnabled())}
+      ${canVibrate() ? toggle('vibe', 'Vibrazione', vibeEnabled()) : ''}</div>
+    <div class="set-row"><b>Partite</b>
+      <div class="seg">${SPEEDS.map((s) => `<button data-set-speed="${s}" class="${savedSpeed() === s ? 'on' : ''}">${s}×</button>`).join('')}</div>
+      <small class="muted">Velocità con cui partono (in partita la cambi quando vuoi)</small>
+      ${toggle('autoevo', 'Evoluzione automatica', localStorage.getItem(AUTO_EVO_KEY) === '1')}</div>
+    <div class="set-row"><b>Fumetti guida</b>
+      <button data-reset-coach>Rivedili alla prossima partita</button></div>
+  </section>`;
+}
+
 /** Pannello per esportare o importare la carriera con un codice. */
 function savePanelHtml(save: SaveData, state: HubState): string {
+  if (state.savePanel === 'settings') return settingsHtml(save);
   if (state.savePanel === 'export') {
     return `<section class="card save-panel">
       <h3>Esporta salvataggio</h3>
@@ -949,6 +1059,60 @@ function careerStatsHtml(save: SaveData): string {
   </details>`;
 }
 
+/** Sfida del giorno e amichevole con un amico: partite fuori dalla carriera, senza esperienza. */
+function extraHtml(save: SaveData, state: HubState): string {
+  const problem = lineupProblem(save);
+  const plan = dailyPlan();
+  const today = save.daily?.key === plan.key ? save.daily : null;
+  const best = today?.best;
+  const off = problem ? `disabled title="${esc(problem)}"` : '';
+  return `<div class="extra-grid">
+    <section class="card daily" style="--team:${plan.color}">
+      <small class="muted">Sfida del giorno · ${new Date().toLocaleDateString('it-IT', { day: 'numeric', month: 'long' })} · uguale per tutti</small>
+      <h3>Squadra di tipo ${typeChip(plan.type)}</h3>
+      <div class="mini-team">${plan.species.map((k) => `<img src="${spriteUrl(POKEDEX[k].dex)}" alt="" title="${esc(POKEDEX[k].name)}">`).join('')}</div>
+      <p class="muted">Già evoluti, al livello dei tuoi titolari. Gioca quante volte vuoi: conta il risultato migliore. Non dà esperienza.</p>
+      <p>${best ? `Oggi: <b>${best.won ? 'vinta' : 'non ancora vinta'}</b>, miglior risultato <b>${best.gf}–${best.ga}</b> in ${today!.tries} ${today!.tries === 1 ? 'tentativo' : 'tentativi'}` : 'Oggi non l\'hai ancora giocata'}${save.dailyWins ? ` · giorni vinti: <b>${save.dailyWins}</b>` : ''}</p>
+      <div class="event-actions"><button class="primary" data-daily="play" ${off}>Gioca la sfida</button><button data-daily="skip" ${off}>Salta ⏭</button></div>
+    </section>
+    <section class="card friendly">
+      <small class="muted">Amichevole · senza server, con un codice</small>
+      <h3>Sfida un amico</h3>
+      <p class="muted">Manda il tuo codice squadra a un amico: incollandolo, gioca contro la tua formazione di adesso (titolari e panchina), guidata dal computer. Tu fai lo stesso con il suo. Non dà esperienza.</p>
+      <label class="muted">Il tuo codice squadra</label>
+      <textarea readonly rows="2" data-team-code>${problem ? '' : esc(exportTeam(save))}</textarea>
+      <button data-copy-team ${off}>Copia il mio codice</button>
+      <label class="muted">Il codice del tuo amico</label>
+      <textarea rows="2" data-friend-code placeholder="PKS1.…">${esc(state.friendCode ?? '')}</textarea>
+      ${state.friendError ? `<p class="toast warn">${esc(state.friendError)}</p>` : ''}
+      <div class="event-actions"><button class="primary" data-friendly="play" ${off}>Gioca l'amichevole</button><button data-friendly="skip" ${off}>Salta ⏭</button></div>
+    </section>
+  </div>`;
+}
+
+/** Albo d'Oro: la squadra di ogni titolo, dal più recente. */
+function hallOfFameHtml(save: SaveData): string {
+  const hall = save.hallOfFame ?? [];
+  if (!hall.length) return '';
+  const entries = [...hall]
+    .reverse()
+    .map((h) => `<div class="hof-entry" style="--team:${h.color}">
+      <div class="hof-head"><b>${h.title}° titolo</b> <small class="muted">${new Date(h.date).toLocaleDateString('it-IT', { day: 'numeric', month: 'long', year: 'numeric' })} · ${esc(h.club)} · finale ${h.score[0]}–${h.score[1]} con Blu</small></div>
+      <div class="hof-team">${h.members
+        .map((m) => `<span class="hof-mon">
+          <img src="${spriteUrl(POKEDEX[m.form].dex, m.shiny)}" alt="">
+          <b>${esc(m.name)}${m.shiny ? ' ✨' : ''}</b>
+          <small><span class="role role-${m.role}">${m.role}</span> Lv${m.level}${m.goals ? ` · ⚽ ${m.goals}` : ''}</small>
+        </span>`)
+        .join('')}</div>
+    </div>`)
+    .join('');
+  return `<details class="card fold hall-of-fame" open>
+    <summary><b>🏆 Albo d'Oro</b> <small class="muted">${hall.length} ${hall.length === 1 ? 'titolo' : 'titoli'}</small></summary>
+    ${entries}
+  </details>`;
+}
+
 /** Obiettivi: raggiunti in cima, ognuno si può mostrare come titolo del club. */
 function achievementsHtml(save: SaveData): string {
   const done = new Set(save.achievements);
@@ -977,13 +1141,15 @@ function achievementsHtml(save: SaveData): string {
 function pokedexHtml(save: SaveData): string {
   const seen = new Set(save.dex.seen.filter((k) => POKEDEX[k]));
   const caught = new Set(save.dex.caught.filter((k) => POKEDEX[k]));
+  const shinies = new Set(save.dex.shiny ?? []);
   const num = (dex: number) => `#${String(dex).padStart(3, '0')}`;
   const cell = (k: string) => {
     const sp = POKEDEX[k];
     const got = caught.has(k);
     const state = got ? 'caught' : seen.has(k) ? 'seen' : 'unseen';
-    return `<button class="dex-cell ${state}" data-dex="${k}" title="${esc(`${num(sp.dex)} ${state === 'unseen' ? '???' : sp.name}`)}">
-      <img src="${spriteUrl(sp.dex)}" alt="" loading="lazy">${got ? '<span class="owned-ball"></span>' : ''}
+    const shiny = shinies.has(k);
+    return `<button class="dex-cell ${state}" data-dex="${k}" title="${esc(`${num(sp.dex)} ${state === 'unseen' ? '???' : sp.name}${shiny ? ' · shiny' : ''}`)}">
+      <img src="${spriteUrl(sp.dex, shiny)}" alt="" loading="lazy">${got ? '<span class="owned-ball"></span>' : ''}${shiny ? '<span class="dex-shiny">✨</span>' : ''}
       <small>${num(sp.dex)}</small>
     </button>`;
   };
@@ -1417,12 +1583,15 @@ function renderMap(main: HTMLElement, save: SaveData, ch: Challenges, actions: H
       </section>`
     : '';
   const wildLevel = Math.round(ch.wild.roster.reduce((a, r) => a + r.inst.level, 0) / ch.wild.roster.length);
-  const wildMatch = `<section class="card wild-match">
+  const wildAll = [...ch.wild.roster.map((r) => r.inst), ...(ch.wild.bench ?? [])];
+  const wildShiny = wildAll.find((i) => i.shiny);
+  const wildMatch = `<section class="card wild-match ${wildShiny ? 'has-shiny' : ''}">
     <div>
       <b>Partitella con i selvatici</b> <small>livello ~${wildLevel} · ripetibile</small>
       <p class="muted">Gioca contro i Pokémon selvatici ${loc.wild.length ? 'di questa zona' : 'dei dintorni'}: se vinci, qualcuno può chiederti di unirsi alla squadra.
       Fa anche esperienza (poca, se sei già più forte di loro).</p>
-      <div class="mini-team">${[...ch.wild.roster.map((r) => r.inst), ...(ch.wild.bench ?? [])].map((i) => `<img src="${spriteUrl(POKEDEX[i.speciesKey].dex)}" alt="" title="${esc(POKEDEX[i.speciesKey].name)}">`).join('')}</div>
+      <div class="mini-team">${wildAll.map((i) => `<img class="${i.shiny ? 'shiny' : ''}" src="${spriteUrl(POKEDEX[i.speciesKey].dex, i.shiny)}" alt="" title="${esc(POKEDEX[i.speciesKey].name)}${i.shiny ? ' ✨ shiny' : ''}">`).join('')}</div>
+      ${wildShiny ? `<p class="shiny-note">✨ C'è un <b>${esc(POKEDEX[wildShiny.speciesKey].name)} shiny</b>! Vinci la partitella e chiederà di unirsi a te.</p>` : ''}
     </div>
     <div class="wild-actions">
       <button class="primary" data-play="wild" ${problem ? 'disabled' : ''}>Gioca la partitella</button>
@@ -1462,6 +1631,7 @@ function renderMap(main: HTMLElement, save: SaveData, ch: Challenges, actions: H
         <section class="card loc-head">
           <small class="muted">${KIND_LABEL[loc.kind]} · allenatori di livello ~${loc.level}</small>
           <h2>${esc(loc.name)}</h2>
+          ${loc.weather ? `<p class="weather-line">${WEATHER[loc.weather].icon} <b>${WEATHER[loc.weather].name}</b> <small class="muted">nelle partite all'aperto: ${esc(weatherText(loc.weather))}${loc.gym !== undefined ? ' (la palestra è al chiuso)' : ''}</small></p>` : ''}
           <div class="destinations"><small>Vai a:</small>${destinations}</div>
           ${fly ? `<div class="destinations"><small>Volo:</small>${fly}</div>` : ''}
         </section>

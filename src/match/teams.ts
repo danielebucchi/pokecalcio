@@ -7,9 +7,10 @@ import { benchOf, findOwned, ratingsOf, type SaveData } from '../game/save';
 import { createInstance, type PokemonInstance, type Role } from '../game/stats';
 import { typeMultiplier } from '../game/typechart';
 import { badgeBonus } from '../game/techniques';
+import { SHINY_RATE } from '../game/recruit';
 import { Match, type TeamSetup } from './engine';
 
-function teamFrom(
+export function teamFrom(
   name: string, color: string, controlled: boolean, formation: FormationKey, insts: PokemonInstance[],
   bench: PokemonInstance[] = [],
 ): TeamSetup {
@@ -111,6 +112,20 @@ interface EliteDef {
   /** Squadra già evoluta quanto il livello permette, come nei giochi (le palestre sì). */
   evolved?: boolean;
 }
+
+/**
+ * Sfida del giorno: la squadra del piano di oggi. È già evoluta (i tuoi partono dalla forma base),
+ * quindi gioca qualche livello sotto i tuoi titolari e meno allenata: tarata con le simulazioni per
+ * vincerla circa una volta su due.
+ */
+export const DAILY = { training: 0.3 };
+/** Livelli sotto i tuoi titolari: 8 fino al livello 50, poi meno (a fine avventura la tua squadra è più completa). */
+export const dailyGap = (level: number) => Math.round(Math.min(8, Math.max(3, 8 - (level - 50) * 0.4)));
+export const buildDailyTeam = (plan: { name: string; color: string; formation: FormationKey; species: string[] }, level: number) =>
+  buildEliteTeam({
+    name: plan.name, color: plan.color, formation: plan.formation, level: Math.max(5, level - dailyGap(level)),
+    signature: plan.species[0], pool: plan.species, training: DAILY.training,
+  });
 
 /**
  * Squadra di un capopalestra o di un allenatore della Lega, nuova a ogni sfida: il Pokémon simbolo
@@ -293,6 +308,8 @@ export function buildWildTeam(loc: KantoLocation, playerLevel = 0): TeamSetup {
   const insts = keys.map((k) => {
     const inst = createInstance(k, level());
     spreadEvs(inst, TUNING.wildEvs);
+    // ogni tanto tra i selvatici c'è uno shiny: si vede già prima di giocare e in campo
+    if (Math.random() < SHINY_RATE) inst.shiny = true;
     return inst;
   });
   const { lineup, bench } = bestLineup(insts, formation);

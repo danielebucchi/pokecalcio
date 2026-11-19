@@ -1037,3 +1037,47 @@ body .topbar { padding-top: calc(8px + env(safe-area-inset-top)); }
 .install-card { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
 .install-card img { width: 52px; height: 52px; border-radius: 12px; flex: none; }
 .install-card > div { flex: 1 1 220px; display: flex; flex-direction: column; gap: 2px; }
+
+/* impostazioni */
+.settings .set-row { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; padding: 10px 0; border-top: 1px solid var(--line); width: 100%; box-sizing: border-box; }
+.settings .set-row:first-of-type { border-top: none; }
+.swatches { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.swatch { width: 34px; height: 34px; padding: 0; border-radius: 50%; background: var(--c); border: 3px solid transparent; box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.35); cursor: pointer; }
+.swatches .swatch, .swatches .swatch.on { background: var(--c); }
+.swatches .swatch.custom { background: conic-gradient(#e879a8, #e8a317, #7dd1b8, #8ec5d8, #a890d8, #e879a8); }
+.swatch.on { border-color: var(--ink); transform: scale(1.12); }
+.swatch.custom { position: relative; overflow: hidden; background: conic-gradient(#e879a8, #e8a317, #7dd1b8, #8ec5d8, #a890d8, #e879a8); }
+.swatch.custom input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+.seg { display: inline-flex; gap: 4px; flex-wrap: wrap; }
+.seg button.on, .seg button.on:hover { background: var(--lilac-deep); border-color: var(--lilac-deep); color: #fff; font-weight: 700; }
+.set-toggle { display: flex; align-items: center; gap: 8px; }
+
+/* shiny */
+.shiny-star { font-size: 0.8em; }
+.dex-cell .dex-shiny { position: absolute; top: 2px; left: 4px; font-size: 0.7rem; }
+.offer.shiny { box-shadow: 0 0 0 2px var(--star-deep), 0 10px 30px -10px var(--star-deep); border-radius: 18px; }
+.shiny-chip { margin-bottom: 4px; display: inline-block; align-self: flex-start; width: auto; }
+.starter.shiny { box-shadow: 0 0 0 2px var(--star-deep), 0 10px 30px -10px var(--star-deep); }
+
+/* albo d'oro */
+.hof-entry { margin-top: 12px; padding: 10px 12px; border-radius: 16px; background: var(--track); border-left: 5px solid var(--team); }
+.hof-team { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.hof-mon { display: flex; flex-direction: column; align-items: center; text-align: center; min-width: 82px; }
+.hof-mon img { width: 64px; height: 64px; image-rendering: pixelated; }
+.hof-mon small { color: var(--ink-mute); font-size: 0.7rem; }
+
+/* meteo */
+.sb-weather { font-size: 0.78rem; color: var(--ink-soft); }
+.weather-line { margin: 4px 0 8px; }
+
+/* sfida del giorno e amichevole */
+.extra-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; margin-bottom: 16px; }
+.extra-grid .card { border-left: 6px solid var(--team, var(--lilac-deep)); display: flex; flex-direction: column; gap: 6px; }
+.extra-grid h3 { margin: 2px 0; display: flex; align-items: center; gap: 8px; }
+.extra-grid p { margin: 2px 0; }
+.extra-grid textarea { width: 100%; font: 0.72rem ui-monospace, monospace; resize: vertical; box-sizing: border-box; }
+.extra-grid .mini-team img { width: 44px; height: 44px; }
+
+.mini-team img.shiny { box-shadow: 0 0 0 2px var(--star-deep); background: var(--star); }
+.shiny-note { margin: 6px 0 0; font-weight: 600; }
+.wild-match.has-shiny { box-shadow: 0 0 0 2px var(--star-deep), 0 10px 30px -12px var(--star-deep); }

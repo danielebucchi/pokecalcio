@@ -2,6 +2,7 @@ import { POKEDEX, TYPE_NAMES } from '../data/pokedex';
 import { STARTER_GROUPS, STARTER_LEVEL, ratingsOf } from '../game/save';
 import { createInstance, gameStats, realStats, type Role } from '../game/stats';
 import { esc, evoLine } from './common';
+import { SHINY_RATE } from '../game/recruit';
 import { spriteUrl } from './sprites';
 import { bindThemeToggle, themeToggleHtml } from './theme';
 
@@ -25,8 +26,10 @@ function preview(key: string) {
  * Schermata d'inizio carriera: la prima squadra si sceglie per ruoli, 1 portiere su 5,
  * 2 difensori su 8 e 2 attaccanti su 8.
  */
-export function renderStarterPick(app: HTMLElement, onConfirm: (keys: string[], clubName: string) => void) {
+export function renderStarterPick(app: HTMLElement, onConfirm: (keys: string[], clubName: string, shiny: string[]) => void) {
   let clubName = 'Biancavilla FC';
+  // anche tra i Pokémon iniziali può capitare uno shiny (si vede già qui, prima di sceglierlo)
+  const shiny = new Set<string>(STARTER_GROUPS.flatMap((g) => g.pool).filter(() => Math.random() < SHINY_RATE));
   const picked: Record<GroupRole, string[]> = { POR: [], DIF: [], ATT: [] };
   const previews = Object.fromEntries(STARTER_GROUPS.flatMap((g) => g.pool).map((k) => [k, preview(k)]));
   const missing = () => STARTER_GROUPS.find((g) => picked[g.role].length < g.count);
@@ -49,9 +52,10 @@ export function renderStarterPick(app: HTMLElement, onConfirm: (keys: string[], 
           const rating = ratings[g.role];
           // il portiere è uno solo: toccandone un altro si cambia scelta
           const disabled = !on && full && g.count > 1;
-          return `<button class="starter ${on ? 'picked' : ''}" data-role="${g.role}" data-key="${k}" ${disabled ? 'disabled' : ''}>
-          <img src="${spriteUrl(sp.dex)}" alt="">
+          return `<button class="starter ${on ? 'picked' : ''} ${shiny.has(k) ? 'shiny' : ''}" data-role="${g.role}" data-key="${k}" ${disabled ? 'disabled' : ''}>
+          <img src="${spriteUrl(sp.dex, shiny.has(k))}" alt="">
           <span class="st-body">
+            ${shiny.has(k) ? '<span class="chip chip-lilac shiny-chip">✨ Shiny!</span>' : ''}
             <span class="st-title"><b>${esc(sp.name)}</b> ${sp.types.map((t) => `<span class="chip type-tag" data-type="${t}">${TYPE_NAMES[t]}</span>`).join(' ')}</span>
             <span class="st-role"><span class="role role-${g.role}">${g.role}</span> voto da ${ROLE_NAMES[g.role]} <b>${Math.round(rating)}</b>
               <span class="bar st-rating"><i style="width:${(rating / top) * 100}%"></i></span></span>
@@ -72,7 +76,7 @@ export function renderStarterPick(app: HTMLElement, onConfirm: (keys: string[], 
     const order = STARTER_GROUPS.flatMap((g) => Array.from({ length: g.count }, (_, i) => [g.role, picked[g.role][i]] as const));
     const slots = order
       .map(([role, k]) => k
-        ? `<button class="st-slot filled" data-role="${role}" data-key="${k}" title="Togli ${esc(POKEDEX[k].name)}"><img src="${spriteUrl(POKEDEX[k].dex)}" alt=""><span class="role role-${role}">${role}</span></button>`
+        ? `<button class="st-slot filled" data-role="${role}" data-key="${k}" title="Togli ${esc(POKEDEX[k].name)}"><img src="${spriteUrl(POKEDEX[k].dex, shiny.has(k))}" alt=""><span class="role role-${role}">${role}</span></button>`
         : `<span class="st-slot"><span class="role role-${role}">${role}</span></span>`)
       .join('');
     const need = missing();
@@ -140,7 +144,10 @@ export function renderStarterPick(app: HTMLElement, onConfirm: (keys: string[], 
         if (groupFull(step)) goTo(step + 1);
         return;
       }
-      if (!missing()) onConfirm(STARTER_GROUPS.flatMap((g) => picked[g.role]), clubName.trim() || 'Biancavilla FC');
+      if (!missing()) {
+        const keys = STARTER_GROUPS.flatMap((g) => picked[g.role]);
+        onConfirm(keys, clubName.trim() || 'Biancavilla FC', keys.filter((k) => shiny.has(k)));
+      }
     };
   };
   const goTo = (i: number) => {
