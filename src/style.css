@@ -795,10 +795,13 @@ canvas { width: auto; height: auto; max-width: 100%; max-height: calc(100vh - 32
 .exp-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 12px; }
 .exp-card { display: flex; gap: 12px; align-items: center; padding: 12px 14px; background: var(--surface); border: 1px solid var(--line-faint); border-radius: 20px; box-shadow: var(--shadow-sm); }
 .exp-card.up { border: 2px solid var(--mint-deep); }
-.exp-card img { width: 56px; height: 56px; image-rendering: pixelated; background: var(--lilac-soft); border-radius: 16px; }
-.exp-card > div { flex: 1; display: flex; flex-direction: column; gap: 4px; align-items: flex-start; }
+.exp-card img { width: 56px; height: 56px; flex: none; image-rendering: pixelated; background: var(--lilac-soft); border-radius: 16px; }
+.exp-card > div { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; align-items: flex-start; }
 .exp-card .bar { width: 100%; }
-.exp-line { display: flex; gap: 8px; align-items: center; }
+.exp-line { display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: center; }
+.exp-line > * { white-space: nowrap; }
+/* "ora può evolvere in …": può essere lunga, va a capo dentro la carta */
+.exp-card .chip-lilac { white-space: normal; max-width: 100%; line-height: 1.3; text-align: left; }
 .boxscores { margin-top: 16px; }
 .boxscores summary { cursor: pointer; font: 500 1.1rem 'Fredoka', sans-serif; }
 .boxscore { table-layout: fixed; }
