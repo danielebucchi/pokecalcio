@@ -6,7 +6,9 @@ import type { Match, Player } from './engine';
  */
 
 /** Quello che serve al renderer per disegnare un Pokémon. */
-export type PlayerView = Pick<Player, 'id' | 'team' | 'role' | 'formKey' | 'stage' | 'hp' | 'maxHp' | 'koTimer' | 'x' | 'y' | 'evo' | 'flash'>;
+export type PlayerView = Pick<Player, 'id' | 'team' | 'role' | 'formKey' | 'stage' | 'hp' | 'maxHp' | 'koTimer' | 'x' | 'y' | 'evo' | 'flash'> & {
+  shiny?: boolean;
+};
 
 export interface BallView {
   x: number;
@@ -34,7 +36,7 @@ export function snapshot(match: Match): Snapshot {
   return {
     players: match.players.map((p) => ({
       id: p.id, team: p.team, role: p.role, formKey: p.formKey, stage: p.stage, hp: p.hp, maxHp: p.maxHp,
-      koTimer: p.koTimer, x: p.x, y: p.y, evo: p.evo, flash: p.flash,
+      koTimer: p.koTimer, x: p.x, y: p.y, evo: p.evo, flash: p.flash, shiny: p.inst.shiny,
     })),
     ball: { x: b.x, y: b.y, vx: b.vx, vy: b.vy, shot: !!b.shot },
   };

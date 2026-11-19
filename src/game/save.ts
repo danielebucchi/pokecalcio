@@ -4,7 +4,7 @@ import { registerCaught, type Dex } from './dex';
 import { TECHNIQUES, type TechniqueId } from './techniques';
 import { KANTO, RIVAL_STEPS, locationById, type KantoLocation, type PlaceEvent, type RouteTrainer } from './kanto';
 import type { LeagueRun } from './league';
-import { createInstance, gameStats, realStats, roleRatings, type PokemonInstance } from './stats';
+import { createInstance, gameStats, realStats, roleRatings, type PokemonInstance, type Role } from './stats';
 
 /** Pokémon della rosa: resta sempre nella forma base, l'evoluzione esiste solo in partita. */
 export interface OwnedPokemon extends PokemonInstance {
@@ -76,8 +76,24 @@ export interface SaveData {
   title?: string;
   /** PC di Bill: chi esce dalla rosa finisce qui, senza limiti (si ritira solo da Campione, in città). */
   box: OwnedPokemon[];
+  /** Albo d'Oro: la squadra di ogni titolo, come la Hall of Fame dei giochi. */
+  hallOfFame?: HallEntry[];
+  /** Sfida del giorno: il giorno (AAAA-MM-GG), i tentativi e il miglior risultato; i giorni vinti in tutto. */
+  daily?: { key: string; tries: number; best: { gf: number; ga: number; won: boolean } | null };
+  dailyWins?: number;
   /** Medaglie che avevi all'ultima copia del salvataggio (o all'ultimo "più tardi"): per il promemoria. */
   backupBadges?: number;
+}
+
+export interface HallEntry {
+  title: number;
+  /** Data (ISO) del titolo. */
+  date: string;
+  club: string;
+  color: string;
+  /** Chi è sceso in campo nella finale con Blu, nella forma più evoluta raggiunta. */
+  members: { form: string; name: string; level: number; role: Role; goals: number; shiny?: boolean }[];
+  score: [number, number];
 }
 
 const KEY = 'pokecalcio-save';
@@ -161,7 +177,8 @@ export function newSave(): SaveData {
  * La prima squadra, in ordine: portiere, 2 difensori, 2 attaccanti (ognuno dal suo gruppo).
  * Tutti allo stesso livello, schierati nel Quadrato ognuno nel ruolo per cui è stato scelto.
  */
-export function chooseStarters(save: SaveData, keys: string[]) {
+/** `shiny`: quali dei Pokémon scelti sono shiny (uscito nella schermata di scelta). */
+export function chooseStarters(save: SaveData, keys: string[], shiny: string[] = []) {
   let i = 0;
   for (const g of STARTER_GROUPS) {
     const part = keys.slice(i, i + g.count);
@@ -171,8 +188,8 @@ export function chooseStarters(save: SaveData, keys: string[]) {
     i += g.count;
   }
   if (keys.length !== STARTER_COUNT) throw new Error('Scegli 5 Pokémon');
-  save.roster = keys.map((key) => ({ ...createInstance(key, STARTER_LEVEL), exp: 0 }));
-  for (const k of keys) registerCaught(save, k);
+  save.roster = keys.map((key) => ({ ...createInstance(key, STARTER_LEVEL), exp: 0, ...(shiny.includes(key) ? { shiny: true } : {}) }));
+  for (const k of keys) registerCaught(save, k, shiny.includes(k));
   save.formation = 'quadrato';
   save.lineup = save.roster.map((p) => p.uid);
   save.bench = autoBench(save);
@@ -232,12 +249,19 @@ const CODE_PREFIX = 'PKC1.';
 
 /** Codice da copiare per portare la carriera su un altro dispositivo (o tenerla da parte). */
 export function exportSave(save: SaveData): string {
-  const json = JSON.stringify(save);
-  // base64 di UTF-8: i soprannomi possono avere accenti ed emoji
-  const bytes = new TextEncoder().encode(json);
+  return CODE_PREFIX + toBase64(JSON.stringify(save));
+}
+
+/** base64 di UTF-8: i soprannomi possono avere accenti ed emoji. */
+export function toBase64(text: string): string {
   let bin = '';
-  for (const b of bytes) bin += String.fromCharCode(b);
-  return CODE_PREFIX + btoa(bin);
+  for (const b of new TextEncoder().encode(text)) bin += String.fromCharCode(b);
+  return btoa(bin);
+}
+
+/** Il contrario di toBase64 (lancia un errore se il testo è rovinato). */
+export function fromBase64(code: string): string {
+  return new TextDecoder().decode(Uint8Array.from(atob(code), (c) => c.charCodeAt(0)));
 }
 
 /**
@@ -249,9 +273,7 @@ export function importSave(code: string): string | null {
   if (!text.startsWith(CODE_PREFIX)) return 'Non sembra un codice di PokéCalcio: deve iniziare con PKC1.';
   let data: SaveData;
   try {
-    const bin = atob(text.slice(CODE_PREFIX.length));
-    const bytes = Uint8Array.from(bin, (c) => c.charCodeAt(0));
-    data = JSON.parse(new TextDecoder().decode(bytes));
+    data = JSON.parse(fromBase64(text.slice(CODE_PREFIX.length)));
   } catch {
     return 'Il codice è incompleto o rovinato: copialo di nuovo per intero.';
   }
@@ -366,13 +388,13 @@ export function addToRoster(save: SaveData, inst: PokemonInstance, releaseUid?: 
   if (releaseUid === TO_BOX) {
     if (save.box.some((p) => p.uid === inst.uid)) return false;
     save.box.push({ ...inst, exp: 0 });
-    registerCaught(save, inst.speciesKey);
+    registerCaught(save, inst.speciesKey, inst.shiny);
     return true;
   }
   if (releaseUid) depositPokemon(save, releaseUid);
   if (save.roster.length >= ROSTER_MAX || save.roster.some((p) => p.uid === inst.uid)) return false;
   save.roster.push({ ...inst, exp: 0 });
-  registerCaught(save, inst.speciesKey);
+  registerCaught(save, inst.speciesKey, inst.shiny);
   save.bench = benchOf(save).map((p) => p.uid);
   if (save.bench.length < BENCH_MAX) save.bench.push(inst.uid);
   return true;

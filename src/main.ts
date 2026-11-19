@@ -1,4 +1,6 @@
 import { checkAchievements } from './game/achievements';
+import { better, dailyPlan, todayKey } from './game/daily';
+import { importTeam } from './game/friendCode';
 import './style.css';
 import { POKEDEX } from './data/pokedex';
 import { GYMS, nextGym, type Gym } from './game/gyms';
@@ -12,7 +14,7 @@ import { recruitOffers, type RecruitOffer } from './game/recruit';
 import { ROSTER_MAX, secondPick, addToRoster, arriveAt, recordHistory, chooseStarters, importSave, lineupProblem, rivalGate, loadSave, newSave, releasable, storeSave, type SaveData } from './game/save';
 import type { Match, TeamSetup } from './match/engine';
 import {
-  buildChampionTeam, buildEventTeam, buildGymTeam, buildRematchTeam, postGameLevels, buildLeagueTeam, buildLegendaryTeam, buildTrainerTeam, buildWildTeam, clubTeam, simulateMatch,
+  buildChampionTeam, buildDailyTeam, buildEventTeam, buildGymTeam, buildRematchTeam, postGameLevels, buildLeagueTeam, buildLegendaryTeam, buildTrainerTeam, buildWildTeam, clubTeam, simulateMatch,
 } from './match/teams';
 import { renderHub, type ChallengeKind, type Challenges, type HubState } from './ui/hub';
 import { runMatch, skipMatch, type MatchBanner } from './ui/matchScreen';
@@ -96,8 +98,8 @@ export function canTravel(id: string): boolean {
 function showHub() {
   // carriera nuova: prima si sceglie la squadra
   if (!save.roster.length) {
-    renderStarterPick(app, (keys, clubName) => {
-      chooseStarters(save, keys);
+    renderStarterPick(app, (keys, clubName, shiny) => {
+      chooseStarters(save, keys, shiny);
       if (clubName) save.clubName = clubName;
       storeSave(save);
       showHub();
@@ -128,6 +130,17 @@ function showHub() {
       storeSave(save);
       hub.tab = 'map';
       showHub();
+    },
+    playDaily(skip) {
+      if (lineupProblem(save)) return;
+      playSpecial('daily', buildDailyTeam(dailyPlan(), Math.round(lineupLevel())), skip);
+    },
+    playFriendly(code, skip) {
+      if (lineupProblem(save)) return 'Prima sistema la formazione.';
+      const team = importTeam(code);
+      if (typeof team === 'string') return team;
+      playSpecial('friendly', team, skip);
+      return null;
     },
     importSave(code) {
       const err = importSave(code);
@@ -168,6 +181,9 @@ function lineupLevel(): number {
   return lv.length ? lv.reduce((a, b) => a + b, 0) / lv.length : 0;
 }
 
+/** Partite all'aperto, dove conta il meteo del luogo. */
+const OUTDOOR: ChallengeKind[] = ['wild', 'trainer', 'legendary', 'event'];
+
 function playMatch(kind: ChallengeKind, trainerId?: string, skip = false) {
   const c = challenges();
   const route = kind === 'trainer' ? c.trainers.find((t) => t.trainer.id === trainerId) : undefined;
@@ -186,6 +202,8 @@ function playMatch(kind: ChallengeKind, trainerId?: string, skip = false) {
   (skip ? skipMatch : runMatch)(app, [clubTeam(save), opponent], {
     // in palestra e in Lega non si pareggia: si va ai rigori
     knockout: kind === 'league' || kind === 'gym' || kind === 'champion' || kind === 'rematch',
+    // il meteo del luogo conta solo all'aperto (palestre e Lega sono al chiuso)
+    weather: OUTDOOR.includes(kind) ? c.location.weather : undefined,
     onFinish(match) {
       // titolo per lo storico, prima che gli esiti cambino lo stato (la Lega passa al turno dopo)
       const historyTitle =
@@ -252,6 +270,50 @@ function playMatch(kind: ChallengeKind, trainerId?: string, skip = false) {
       hub.message = null;
       // a fine partita, se hai sessioni da usare, si apre l'allenamento (altrimenti ce se ne dimentica)
       if (counted && save.sessionsLeft > 0) hub.tab = 'training';
+      showHub();
+    },
+  });
+}
+
+/**
+ * Partite fuori dalla carriera: la sfida del giorno e le amichevoli con gli amici. Non danno esperienza
+ * né contano nel record; la sfida del giorno vale per gli obiettivi, l'amichevole no.
+ */
+function playSpecial(kind: 'daily' | 'friendly', opponent: TeamSetup, skip = false) {
+  (skip ? skipMatch : runMatch)(app, [clubTeam(save), opponent], {
+    onFinish(match) {
+      registerMatch(save, match, 0);
+      const won = match.winner === 0;
+      const gf = match.score[0];
+      const ga = match.score[1];
+      let banner: MatchBanner;
+      if (kind === 'daily') {
+        const key = todayKey();
+        if (save.daily?.key !== key) save.daily = { key, tries: 0, best: null };
+        const d = save.daily;
+        d.tries++;
+        const record = better({ gf, ga, won }, d.best);
+        if (won && !d.best?.won) save.dailyWins = (save.dailyWins ?? 0) + 1;
+        if (record) d.best = { gf, ga, won };
+        banner = {
+          title: won ? 'Sfida del giorno vinta!' : 'Sfida del giorno: niente da fare, per ora',
+          text: `${record && d.tries > 1 ? 'Nuovo record di oggi! ' : ''}Miglior risultato di oggi: ${d.best!.gf}–${d.best!.ga} (tentativi: ${d.tries}). Giorni vinti in tutto: ${save.dailyWins ?? 0}. Domani c'è una squadra nuova.`,
+          color: opponent.color,
+        };
+      } else {
+        banner = {
+          title: won ? `Amichevole vinta contro ${opponent.name}!` : match.winner === null ? 'Amichevole finita in pareggio' : `Amichevole persa contro ${opponent.name}`,
+          text: 'Le amichevoli non danno esperienza: servono a misurarsi. Rigiocala quando vuoi.',
+          color: opponent.color,
+        };
+      }
+      const achievements = kind === 'daily' ? checkAchievements(save, match, 'daily') : [];
+      storeSave(save);
+      return { report: [], banner, achievements };
+    },
+    onLeave() {
+      hub.message = null;
+      hub.tab = 'missions';
       showHub();
     },
   });
@@ -374,6 +436,20 @@ function championOutcome(match: Match): MatchBanner {
   }
   run.championMatch = 'won';
   save.titles++;
+  // nell'Albo d'Oro la squadra della finale, come la Hall of Fame dei giochi
+  (save.hallOfFame ??= []).push({
+    title: save.titles,
+    date: new Date().toISOString(),
+    club: save.clubName,
+    color: save.color,
+    score: [match.score[0], match.score[1]],
+    members: match.appearances
+      .filter((p) => p.team === 0)
+      .map((p) => ({
+        form: p.peakForm, name: p.inst.nickname || POKEDEX[p.peakForm].name, level: p.inst.level, role: p.role,
+        goals: p.tally.goals, shiny: p.inst.shiny,
+      })),
+  });
   return {
     title: 'Congratulazioni! Sei il nuovo Campione della Lega Pokémon!',
     text: `Hai battuto Blu. Titoli vinti: ${save.titles}. Il tetto di livello è sparito, si apre la Grotta Ignota e nelle città ti aspettano le rivincite con i capipalestra.`,

@@ -86,8 +86,68 @@ export class Renderer {
     const sorted = [...players].sort((a, b) => Number(active(b)) - Number(active(a)) || a.y - b.y);
     for (const p of sorted) this.drawPlayer(p, !view);
     this.drawBall(view ? view.ball : { ...this.match.ball, shot: !!this.match.ball.shot });
+    this.drawWeather();
     if (view) this.drawBanner('REPLAY', '#e879a8');
     else this.drawSetPieceBanner();
+  }
+
+  /** Meteo sopra il campo: gocce, luce calda, sabbia che corre o chicchi di grandine. */
+  private drawWeather() {
+    const w = this.match.weather;
+    if (!w) return;
+    const c = this.ctx;
+    const t = performance.now() / 1000;
+    const W = this.width;
+    const H = this.height;
+    // posizione "casuale" ma stabile di ogni particella
+    const rnd = (i: number, k: number) => {
+      const x = Math.sin(i * 127.1 + k * 311.7) * 43758.5453;
+      return x - Math.floor(x);
+    };
+    c.save();
+    if (w === 'sole') {
+      const g = c.createRadialGradient(W * 0.15, -H * 0.1, 0, W * 0.15, -H * 0.1, Math.max(W, H));
+      g.addColorStop(0, 'rgba(255, 214, 120, 0.32)');
+      g.addColorStop(1, 'rgba(255, 214, 120, 0)');
+      c.fillStyle = g;
+      c.fillRect(0, 0, W, H);
+    } else if (w === 'pioggia') {
+      c.fillStyle = 'rgba(60, 80, 120, 0.12)';
+      c.fillRect(0, 0, W, H);
+      c.strokeStyle = 'rgba(200, 220, 255, 0.45)';
+      c.lineWidth = 1.5;
+      c.beginPath();
+      for (let i = 0; i < 90; i++) {
+        const speed = 500 + rnd(i, 1) * 300;
+        const x = (rnd(i, 2) * (W + 100) - t * 60) % (W + 100);
+        const y = (rnd(i, 3) * H + t * speed) % (H + 40) - 20;
+        const xx = x < 0 ? x + W + 100 : x;
+        c.moveTo(xx, y);
+        c.lineTo(xx - 5, y + 16);
+      }
+      c.stroke();
+    } else if (w === 'sabbia') {
+      c.fillStyle = 'rgba(214, 178, 110, 0.2)';
+      c.fillRect(0, 0, W, H);
+      c.fillStyle = 'rgba(232, 200, 140, 0.55)';
+      for (let i = 0; i < 120; i++) {
+        const x = (rnd(i, 1) * W + t * (180 + rnd(i, 2) * 220)) % W;
+        const y = (rnd(i, 3) * H + Math.sin(t * 2 + i) * 6 + H) % H;
+        c.fillRect(x, y, 3, 1.5);
+      }
+    } else if (w === 'grandine') {
+      c.fillStyle = 'rgba(220, 235, 255, 0.12)';
+      c.fillRect(0, 0, W, H);
+      c.fillStyle = 'rgba(255, 255, 255, 0.85)';
+      for (let i = 0; i < 70; i++) {
+        const x = (rnd(i, 1) * W + Math.sin(t + i) * 8 + W) % W;
+        const y = (rnd(i, 2) * H + t * (160 + rnd(i, 3) * 120)) % (H + 10) - 5;
+        c.beginPath();
+        c.arc(x, y, 1.6 + rnd(i, 4) * 1.4, 0, Math.PI * 2);
+        c.fill();
+      }
+    }
+    c.restore();
   }
 
   private drawSetPieceBanner() {
@@ -248,8 +308,12 @@ export class Renderer {
     }
 
     const sp = POKEDEX[p.formKey];
-    const img = spriteFor(sp.dex);
+    const shiny = 'inst' in p ? (p as Player).inst.shiny : p.shiny;
+    const img = spriteFor(sp.dex, shiny);
     const size = 76 + p.stage * 10;
+    // shiny: alone dorato e scintille a intermittenza, come nei giochi (alcuni shiny hanno colori
+    // quasi uguali al normale: così si riconoscono sempre)
+    if (shiny && !ko) this.drawShinyAura(x, y - 6, size);
     // evoluzione appena avvenuta: parte l'animazione (lo stadio sale; un cambio lo riporta a 0)
     const now = performance.now();
     if (live) {
@@ -366,6 +430,40 @@ export class Renderer {
       c.fillStyle = '#e879a8';
       c.font = `600 13px ${FONT_DISPLAY}`;
       c.fillText(`KO ${mins}'`, x, by - 5);
+    }
+    c.restore();
+  }
+
+  private drawShinyAura(x: number, y: number, size: number) {
+    const c = this.ctx;
+    const t = performance.now() / 1000;
+    c.save();
+    const g = c.createRadialGradient(x, y, size * 0.1, x, y, size * 0.5);
+    g.addColorStop(0, 'rgba(255, 236, 140, 0.35)');
+    g.addColorStop(1, 'rgba(255, 236, 140, 0)');
+    c.fillStyle = g;
+    c.beginPath();
+    c.arc(x, y, size * 0.5, 0, Math.PI * 2);
+    c.fill();
+    // tre stelline che si accendono una dopo l'altra
+    for (let i = 0; i < 3; i++) {
+      const phase = (t * 1.2 + i / 3) % 1;
+      const a = Math.sin(phase * Math.PI);
+      const ang = i * 2.1 + Math.floor(t * 1.2 + i / 3) * 1.3;
+      const r = size * 0.36;
+      const sx = x + Math.cos(ang) * r;
+      const sy = y + Math.sin(ang) * r;
+      const s = 3 + a * 4;
+      c.globalAlpha = a;
+      c.fillStyle = '#fff6c2';
+      c.beginPath();
+      // stella a quattro punte
+      c.moveTo(sx, sy - s);
+      c.quadraticCurveTo(sx, sy, sx + s, sy);
+      c.quadraticCurveTo(sx, sy, sx, sy + s);
+      c.quadraticCurveTo(sx, sy, sx - s, sy);
+      c.quadraticCurveTo(sx, sy, sx, sy - s);
+      c.fill();
     }
     c.restore();
   }

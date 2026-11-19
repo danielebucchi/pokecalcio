@@ -36,21 +36,28 @@ function performance(p: Player): { score: number; reason: string | null } {
 }
 
 /**
- * Chi chiede di unirsi dopo la partitella (vuoto se non hai vinto). Di solito uno, a volte due:
- * più la vittoria è larga, più è probabile.
+ * Chi chiede di unirsi dopo la partitella, solo se hai vinto. Gli shiny della squadra avversaria
+ * (anche in panchina) chiedono sempre; degli altri di solito uno, a volte due: più la vittoria è
+ * larga, più è probabile.
  */
+/** Probabilità che un selvatico (o un Pokémon iniziale) sia shiny (nei giochi è molto più rara). */
+export const SHINY_RATE = 1 / 128;
+
 export function recruitOffers(match: Match, team: 0 | 1, rng: () => number = Math.random): RecruitOffer[] {
   const them: 0 | 1 = team === 0 ? 1 : 0;
+  const shinies = [...match.appearances.filter((p) => p.team === them).map((p) => p.inst), ...match.bench[them]]
+    .filter((inst, i, all) => inst.shiny && all.findIndex((x) => x.uid === inst.uid) === i)
+    .map((inst) => ({ inst, reason: 'è uno shiny e vuole venire con te' }));
   if (match.winner !== team) return [];
   const margin = match.score[team] - match.score[them];
   const count = (rng() < Math.min(0.9, 0.65 + 0.1 * (margin - 1)) ? 1 : 0) + (rng() < 0.2 ? 1 : 0);
   const pool = match.appearances
-    .filter((p) => p.team === them)
+    .filter((p) => p.team === them && !p.inst.shiny)
     .map((p) => {
       const perf = performance(p);
       return { p, weight: willingness(p.inst.speciesKey) * (1 + perf.score), reason: perf.reason };
     });
-  const offers: RecruitOffer[] = [];
+  const offers: RecruitOffer[] = [...shinies];
   for (let i = 0; i < count && pool.length; i++) {
     // sorteggio pesato: i più disposti escono più spesso, ma non sempre
     const total = pool.reduce((a, c) => a + c.weight, 0);

@@ -6,7 +6,7 @@ import type { SaveData } from './save';
  * Obiettivi: imprese da compiere in partita o nella carriera. Ognuno dà una sessione di allenamento
  * e un titolo da mostrare accanto al nome del club.
  */
-export type MatchKind = 'gym' | 'league' | 'trainer' | 'wild' | 'legendary' | 'event' | 'champion' | 'rematch';
+export type MatchKind = 'gym' | 'league' | 'trainer' | 'wild' | 'legendary' | 'event' | 'champion' | 'rematch' | 'daily';
 
 interface Ctx {
   save: SaveData;
@@ -98,6 +98,10 @@ export const ACHIEVEMENTS: Achievement[] = [
   {
     id: 'collezionista', name: 'Collezionista', description: 'Prendi 40 specie nel Pokédex.',
     check: ({ save }) => save.dex.caught.length >= 40,
+  },
+  {
+    id: 'cromatico', name: 'Shiny', description: 'Cattura un Pokémon shiny: ogni tanto chi chiede di unirsi ha colori rari.',
+    check: ({ save }) => (save.dex.shiny?.length ?? 0) > 0,
   },
   {
     // come il diploma di Game Freak in Rosso/Blu

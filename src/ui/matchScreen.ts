@@ -6,6 +6,7 @@ import { TO_BOX, ratingsOf } from '../game/save';
 import { Match, MAX_SUBS, SIM_PER_MINUTE, formName, isActive, type MatchEvent, type Player, type TeamSetup } from '../match/engine';
 import { ACHIEVEMENT_SESSIONS, type Achievement } from '../game/achievements';
 import { Renderer } from '../match/renderer';
+import { WEATHER, weatherText, type Weather } from '../game/weather';
 import { closeCoach, coach, type CoachStep } from './coach';
 import { ReplayRecorder, clipDuration, frameAt, type Snapshot } from '../match/replay';
 import { esc } from './common';
@@ -13,16 +14,9 @@ import { medalHtml, spriteUrl } from './sprites';
 import {
   canVibrate, musicEnabled, playSfx, setMusic, setSfx, setVibe, sfxEnabled, startMusic, stopMusic, vibeEnabled, vibrate, type Sfx,
 } from './sound';
+import { AUTO_EVO_KEY, COACH_KEY, REPLAY_TIP_KEY, SPEEDS, SPEED_KEY, distinctFrom, savedSpeed } from './settings';
 import { bindThemeToggle, themeToggleHtml } from './theme';
 
-const AUTO_EVO_KEY = 'pokecalcio-autoevo';
-/** Velocità della partita: l'ultima scelta resta per le partite successive. */
-const SPEED_KEY = 'pokecalcio-speed';
-const SPEEDS = [1, 2, 4, 8];
-const savedSpeed = () => {
-  const v = Number(localStorage.getItem(SPEED_KEY));
-  return SPEEDS.includes(v) ? v : 1;
-};
 
 /** Etichetta della cronaca per tipo di evento: [testo, colore della chip]. */
 const EVENT_TAGS: Partial<Record<MatchEvent['kind'], [string, string]>> = {
@@ -64,6 +58,8 @@ export interface MatchBanner {
 export interface MatchCallbacks {
   /** Eliminazione diretta: in caso di pareggio si tirano i rigori. */
   knockout?: boolean;
+  /** Meteo del luogo (solo all'aperto). */
+  weather?: Weather;
   /** A fine partita: aggiorna la carriera e restituisce l'esperienza guadagnata. */
   onFinish(match: Match): { report: ExpReport[]; banner?: MatchBanner; offers?: RecruitOffer[]; achievements?: Achievement[] };
   /**
@@ -77,8 +73,6 @@ export interface MatchCallbacks {
   onLeave(counted?: boolean): void;
 }
 
-const COACH_KEY = 'pokecalcio-coach-match';
-const REPLAY_TIP_KEY = 'pokecalcio-coach-replay';
 
 /** Fumetti della prima partita. */
 const MATCH_TOUR: CoachStep[] = [
@@ -103,7 +97,9 @@ export interface RosterState {
 
 /** Gioca la partita dentro `app`. Restituisce una funzione che ferma il ciclo. */
 export function runMatch(app: HTMLElement, teams: [TeamSetup, TeamSetup], cb: MatchCallbacks): () => void {
-  const match = new Match(teams, { knockout: cb.knockout });
+  // se l'avversario ha un colore troppo simile al tuo, in campo ne usa un altro
+  teams = [teams[0], { ...teams[1], color: distinctFrom(teams[0].color, teams[1].color) }];
+  const match = new Match(teams, { knockout: cb.knockout, weather: cb.weather });
   const [t0, t1] = match.teams;
   const humanTeam = t0.controlled ? 0 : 1;
   // sul telefono in verticale il campo si disegna in verticale: i Pokémon vengono molto più grandi
@@ -122,6 +118,7 @@ export function runMatch(app: HTMLElement, teams: [TeamSetup, TeamSetup], cb: Ma
         <div class="sb-score"><span id="s0">0</span> - <span id="s1">0</span></div>
         <div class="sb-team" style="--team:${t1.color}">${esc(t1.name)}</div>
         <div class="sb-clock" id="clock">0'</div>
+        ${cb.weather ? `<div class="sb-weather" title="${esc(weatherText(cb.weather))}">${WEATHER[cb.weather].icon} ${WEATHER[cb.weather].name}</div>` : ''}
       </div>
       <div class="controls">
         <button id="pause">Pausa</button>
@@ -289,6 +286,11 @@ export function runMatch(app: HTMLElement, teams: [TeamSetup, TeamSetup], cb: Ma
     pauseBtn.textContent = paused ? 'Riprendi' : 'Pausa';
   };
   pauseBtn.onclick = () => setPaused(!paused);
+  // esci dall'app (o arriva una chiamata): la partita si ferma e ti aspetta
+  const onHide = () => {
+    if (document.hidden && !paused) setPaused(true);
+  };
+  document.addEventListener('visibilitychange', onHide);
   document.querySelectorAll<HTMLButtonElement>('[data-speed]').forEach((b) => {
     b.onclick = () => {
       speed = Number(b.dataset.speed);
@@ -403,8 +405,8 @@ export function runMatch(app: HTMLElement, teams: [TeamSetup, TeamSetup], cb: Ma
       c.sub.title = subBlock ?? 'Sostituisci con una riserva';
       if (c.form !== `${p.inst.uid}:${p.formKey}`) {
         c.form = `${p.inst.uid}:${p.formKey}`;
-        c.img.src = spriteUrl(POKEDEX[p.formKey].dex);
-        c.name.innerHTML = `<b>${formName(p)}</b> <small>Lv${p.inst.level} · ${p.role}</small>`;
+        c.img.src = spriteUrl(POKEDEX[p.formKey].dex, p.inst.shiny);
+        c.name.innerHTML = `<b>${formName(p)}</b>${p.inst.shiny ? ' <span class="shiny-star" title="Shiny">✨</span>' : ''} <small>Lv${p.inst.level} · ${p.role}</small>`;
       }
       c.hp.style.width = `${(p.hp / p.maxHp) * 100}%`;
       c.evo.style.width = `${p.evo}%`;
@@ -457,6 +459,7 @@ export function runMatch(app: HTMLElement, teams: [TeamSetup, TeamSetup], cb: Ma
   };
   const cleanup = () => {
     closeCoach();
+    document.removeEventListener('visibilitychange', onHide);
     cancelAnimationFrame(raf);
     window.removeEventListener('keydown', onKey);
     stopMusic();
@@ -479,7 +482,7 @@ export function runMatch(app: HTMLElement, teams: [TeamSetup, TeamSetup], cb: Ma
  */
 export function skipMatch(app: HTMLElement, teams: [TeamSetup, TeamSetup], cb: MatchCallbacks) {
   const humanTeam = teams[0].controlled ? 0 : 1;
-  const match = new Match([{ ...teams[0], controlled: false }, { ...teams[1], controlled: false }], { knockout: cb.knockout });
+  const match = new Match([{ ...teams[0], controlled: false }, { ...teams[1], controlled: false }], { knockout: cb.knockout, weather: cb.weather });
   while (!match.finished) match.step(1 / 60);
   const { report, banner, offers, achievements } = cb.onFinish(match);
   showPostMatch(app, match, humanTeam, report, banner, cb.onLeave, offers ?? [], cb.recruit, cb.roster, achievements);
@@ -502,9 +505,10 @@ function showPostMatch(
     const g = gameStats(realStats(sp, o.inst));
     const ratings = ratingsOf(o.inst);
     const best = (['DIF', 'CEN', 'ATT'] as const).reduce((a, b) => (ratings[b] > ratings[a] ? b : a));
-    return `<div class="offer" data-offer="${i}">
-      <img src="${spriteUrl(sp.dex)}" alt="">
+    return `<div class="offer ${o.inst.shiny ? 'shiny' : ''}" data-offer="${i}">
+      <img src="${spriteUrl(sp.dex, o.inst.shiny)}" alt="">
       <div class="offer-body">
+        ${o.inst.shiny ? '<span class="chip chip-lilac shiny-chip">✨ Shiny!</span>' : ''}
         <span class="offer-title"><b>${esc(sp.name)}</b>${ownedBall(roster?.().species.filter((k) => k === o.inst.speciesKey).length ?? 0)} <small>Lv${o.inst.level}</small> ${sp.types.map((t) => `<span class="chip type-tag" data-type="${t}">${TYPE_NAMES[t]}</span>`).join(' ')}</span>
         <div class="pick-stats"><span>ATT <b>${g.att}</b></span><span>DIF <b>${g.dif}</b></span><span>VEL <b>${g.vel}</b></span><span>PV <b>${g.pv}</b></span>
           <span><span class="role role-${best}">${best}</span> voto ${Math.round(ratings[best])}</span></div>
@@ -574,7 +578,7 @@ function showPostMatch(
     .map((r) => {
       const up = r.toLevel > r.fromLevel;
       return `<div class="exp-card ${up ? 'up' : ''}">
-        <img src="${spriteUrl(POKEDEX[r.speciesKey].dex)}" alt="">
+        <img src="${spriteUrl(POKEDEX[r.speciesKey].dex, r.shiny)}" alt="">
         <div>
           <b>${esc(r.name)}</b> ${r.played ? '' : '<span class="chip">riserva</span>'}
           <div class="exp-line">
@@ -617,8 +621,8 @@ function showPostMatch(
       <button class="primary big" data-continue>Continua</button>
     </section>
     ${offersHtml}
-    <h3>Esperienza guadagnata</h3>
-    <div class="exp-grid">${expCards}</div>
+    ${report.length ? `<h3>Esperienza guadagnata</h3>
+    <div class="exp-grid">${expCards}</div>` : ''}
     <details class="card boxscores">
       <summary>Tabellino della partita</summary>
       ${table(0)}${table(1)}

@@ -4,6 +4,7 @@ import {
   type GameStats, type PokemonInstance, type Role,
 } from '../game/stats';
 import { typeMultiplier } from '../game/typechart';
+import { weatherFactor, type Weather } from '../game/weather';
 
 export type { Role };
 
@@ -240,8 +241,12 @@ export class Match {
   /** Modulo di ogni squadra, dal ruolo dei titolari: con centrocampisti è il Rombo, senza il Quadrato. */
   private readonly shape: ['rombo' | 'quadrato', 'rombo' | 'quadrato'];
 
-  constructor(teams: [TeamSetup, TeamSetup], opts: { knockout?: boolean } = {}) {
+  /** Meteo della partita (solo all'aperto): cambia ATT o DIF di alcuni tipi. */
+  readonly weather: Weather | undefined;
+
+  constructor(teams: [TeamSetup, TeamSetup], opts: { knockout?: boolean; weather?: Weather } = {}) {
     this.teams = teams;
+    this.weather = opts.weather;
     this.knockout = opts.knockout ?? false;
     this.shape = teams.map((t) => (t.roster.some((r) => r.role === 'CEN') ? 'rombo' : 'quadrato')) as Match['shape'];
     this.bench = [[...(teams[0].bench ?? [])], [...(teams[1].bench ?? [])]];
@@ -399,9 +404,11 @@ export class Match {
     const base = gameStats(realStats(sp, p.inst));
     // bonus delle medaglie della squadra e tecnica Scatto
     const bonus = this.teams[p.team].bonus ?? {};
+    // meteo: dipende dai tipi della forma attuale (evolvendo possono cambiare)
+    const wx = weatherFactor(sp.types, this.weather);
     const g: GameStats = {
-      att: Math.round(base.att * (bonus.att ?? 1)),
-      dif: Math.round(base.dif * (bonus.dif ?? 1)),
+      att: Math.round(base.att * (bonus.att ?? 1) * wx.att),
+      dif: Math.round(base.dif * (bonus.dif ?? 1) * wx.dif),
       vel: Math.round(base.vel * (bonus.vel ?? 1) * (p.inst.technique === 'scatto' ? 1.1 : 1)),
       pv: Math.round(base.pv * (bonus.pv ?? 1)),
     };

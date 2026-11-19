@@ -1,4 +1,4 @@
-const cache = new Map<number, HTMLImageElement>();
+const cache = new Map<string, HTMLImageElement>();
 
 /** Sprite ufficiale della medaglia di una palestra di Kanto (0 = Sasso … 7 = Terra). */
 export const badgeUrl = (gym: number) =>
@@ -8,16 +8,18 @@ export const badgeUrl = (gym: number) =>
 export const medalHtml = (gym: number, big = false, won = true) =>
   `<img class="medal ${big ? 'big' : ''} ${won ? '' : 'locked'}" src="${badgeUrl(gym)}" alt="">`;
 
-export const spriteUrl = (dex: number) =>
-  `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${dex}.png`;
+/** `shiny`: lo sprite shiny. */
+export const spriteUrl = (dex: number, shiny = false) =>
+  `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${shiny ? 'shiny/' : ''}${dex}.png`;
 
 /** Sprite già caricato, oppure null (nel frattempo il renderer disegna un segnaposto). */
-export function spriteFor(dex: number): HTMLImageElement | null {
-  let img = cache.get(dex);
+export function spriteFor(dex: number, shiny = false): HTMLImageElement | null {
+  const key = `${dex}${shiny ? 's' : ''}`;
+  let img = cache.get(key);
   if (!img) {
     img = new Image();
-    img.src = spriteUrl(dex);
-    cache.set(dex, img);
+    img.src = spriteUrl(dex, shiny);
+    cache.set(key, img);
   }
   return img.complete && img.naturalWidth > 0 ? img : null;
 }

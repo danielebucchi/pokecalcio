@@ -122,6 +122,7 @@ export function applyDrill(save: SaveData, p: OwnedPokemon, drill: Drill): strin
 export interface ExpReport {
   uid: string;
   speciesKey: string;
+  shiny?: boolean;
   name: string;
   played: boolean;
   exp: number;
@@ -188,6 +189,6 @@ export function awardMatch(save: SaveData, match: Match, team: 0 | 1): ExpReport
       .map((s) => POKEDEX[s.key].name);
     const capped = p.level >= cap && p.level < MAX_LEVEL;
     const expPct = p.level >= MAX_LEVEL || capped ? 100 : (p.exp / expToNext(p.level)) * 100;
-    return { uid: p.uid, speciesKey: p.speciesKey, name: (p.nickname || POKEDEX[p.speciesKey].name), played: !!mp, exp, fromLevel, toLevel: p.level, unlocked, expPct, capped };
+    return { uid: p.uid, speciesKey: p.speciesKey, shiny: p.shiny, name: (p.nickname || POKEDEX[p.speciesKey].name), played: !!mp, exp, fromLevel, toLevel: p.level, unlocked, expPct, capped };
   });
 }

@@ -8,6 +8,8 @@ import type { SaveData } from './save';
 export interface Dex {
   seen: string[];
   caught: string[];
+  /** Specie prese anche shiny. */
+  shiny?: string[];
 }
 
 const add = (list: string[], key: string) => {
@@ -15,9 +17,10 @@ const add = (list: string[], key: string) => {
 };
 
 /** Una specie presa è anche vista. */
-export function registerCaught(save: SaveData, key: string) {
+export function registerCaught(save: SaveData, key: string, shiny = false) {
   add(save.dex.caught, key);
   add(save.dex.seen, key);
+  if (shiny) add((save.dex.shiny ??= []), key);
 }
 
 /** Dopo una partita: tutti quelli scesi in campo sono visti, le forme dei tuoi sono prese. */
@@ -26,6 +29,7 @@ export function registerMatch(save: SaveData, match: Match, team: 0 | 1) {
     for (const key of [p.inst.speciesKey, p.formKey, p.peakForm]) {
       add(save.dex.seen, key);
       if (p.team === team) add(save.dex.caught, key);
+      if (p.team === team && p.inst.shiny) add((save.dex.shiny ??= []), key);
     }
   }
 }

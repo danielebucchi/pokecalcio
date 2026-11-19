@@ -1,3 +1,4 @@
+import type { Weather } from './weather';
 /**
  * La regione di Kanto: città, percorsi e luoghi come in Rosso/Blu, con i Pokémon selvatici della zona
  * (in forma base) e un paio di allenatori iconici per percorso, da battere una volta sola.
@@ -43,6 +44,8 @@ export const eventLevel = (loc: KantoLocation, ev: PlaceEvent) => Math.max(5, lo
 
 export interface KantoLocation {
   id: string;
+  /** Meteo fisso del luogo (solo nelle partite all'aperto). */
+  weather?: Weather;
   name: string;
   kind: LocationKind;
   x: number;
@@ -130,9 +133,9 @@ export const KANTO: KantoLocation[] = [
       { id: 'luna-sapientone', name: 'Sapientone', team: ['grimer', 'voltorb', 'koffing', 'omanyte', 'kabuto'] },
     ],
   },
-  { id: 'percorso-4', name: 'Percorso 4', kind: 'route', x: 540, y: 150, badges: 1, level: 32, wild: ['rattata', 'spearow', 'ekans', 'sandshrew', 'mankey'], trainers: [] },
+  { id: 'percorso-4', weather: 'sabbia', name: 'Percorso 4', kind: 'route', x: 540, y: 150, badges: 1, level: 32, wild: ['rattata', 'spearow', 'ekans', 'sandshrew', 'mankey'], trainers: [] },
   {
-    id: 'celestopoli', name: 'Celestopoli', kind: 'city', x: 650, y: 160, badges: 1, level: 33, gym: 1, wild: [],
+    id: 'celestopoli', weather: 'pioggia', name: 'Celestopoli', kind: 'city', x: 650, y: 160, badges: 1, level: 33, gym: 1, wild: [],
     events: [{
       id: 'ev-bulbasaur', title: 'La ragazza di Celestopoli',
       text: 'Ha in casa un Bulbasaur che non riesce a crescere come vorrebbe: lo affida a chi ha già una medaglia.',
@@ -200,7 +203,7 @@ export const KANTO: KantoLocation[] = [
       { id: 'torre-medium', name: 'Medium', team: ['gastly', 'gastly'] },
     ],
   },
-  { id: 'percorso-8', name: 'Percorso 8', kind: 'route', x: 770, y: 330, badges: 3, level: 41, wild: ['pidgey', 'meowth', 'ekans', 'sandshrew', 'vulpix', 'growlithe'], trainers: [] },
+  { id: 'percorso-8', weather: 'sole', name: 'Percorso 8', kind: 'route', x: 770, y: 330, badges: 3, level: 41, wild: ['pidgey', 'meowth', 'ekans', 'sandshrew', 'vulpix', 'growlithe'], trainers: [] },
   // Mr. Mime: alle porte di Zafferanopoli (nei giochi si aveva con uno scambio)
   { id: 'percorso-7', name: 'Percorso 7', kind: 'route', x: 540, y: 330, badges: 3, level: 41, wild: ['pidgey', 'oddish', 'bellsprout', 'meowth', 'vulpix', 'growlithe', 'mr-mime'], trainers: [] },
   {
@@ -215,7 +218,7 @@ export const KANTO: KantoLocation[] = [
 
   // ── verso Koga (Lv 48) ──
   {
-    id: 'pista-ciclabile', name: 'Pista Ciclabile', kind: 'route', x: 320, y: 460, badges: 4, level: 45,
+    id: 'pista-ciclabile', weather: 'sole', name: 'Pista Ciclabile', kind: 'route', x: 320, y: 460, badges: 4, level: 45,
     // Lickitung: in Rosso/Blu si aveva con lo scambio in fondo alla Pista
     wild: ['rattata', 'spearow', 'doduo', 'lickitung'],
     trainers: [
@@ -224,7 +227,7 @@ export const KANTO: KantoLocation[] = [
     ],
   },
   {
-    id: 'percorso-12', name: 'Percorsi 12-15', kind: 'route', x: 880, y: 450, badges: 4, level: 45,
+    id: 'percorso-12', weather: 'pioggia', name: 'Percorsi 12-15', kind: 'route', x: 880, y: 450, badges: 4, level: 45,
     wild: ['oddish', 'bellsprout', 'venonat', 'pidgey', 'ditto', 'snorlax', 'farfetchd'],
     trainers: [
       { id: 'p12-pescatore', name: 'Pescatore', team: ['magikarp', 'goldeen', 'tentacool'] },
@@ -262,7 +265,7 @@ export const KANTO: KantoLocation[] = [
 
   // ── verso Blaine (Lv 58) ──
   {
-    id: 'percorsi-19-20', name: 'Percorsi 19-20', kind: 'route', x: 400, y: 640, badges: 5, level: 55,
+    id: 'percorsi-19-20', weather: 'pioggia', name: 'Percorsi 19-20', kind: 'route', x: 400, y: 640, badges: 5, level: 55,
     wild: ['tentacool', 'magikarp', 'shellder', 'horsea', 'staryu', 'krabby'],
     trainers: [
       { id: 'p19-nuotatore', name: 'Nuotatore', team: ['tentacool', 'shellder', 'horsea'] },
@@ -270,11 +273,11 @@ export const KANTO: KantoLocation[] = [
     ],
   },
   {
-    id: 'isole-spumarine', name: 'Isole Spumarine', kind: 'dungeon', x: 300, y: 660, badges: 5, level: 56,
+    id: 'isole-spumarine', weather: 'grandine', name: 'Isole Spumarine', kind: 'dungeon', x: 300, y: 660, badges: 5, level: 56,
     wild: ['seel', 'psyduck', 'slowpoke', 'zubat', 'krabby', 'jynx'], trainers: [], legendary: { key: 'articuno', levelGap: -6 },
   },
   {
-    id: 'isola-cannella', name: 'Isola Cannella', kind: 'city', x: 200, y: 650, badges: 5, level: 57, gym: 6,
+    id: 'isola-cannella', weather: 'sole', name: 'Isola Cannella', kind: 'city', x: 200, y: 650, badges: 5, level: 57, gym: 6,
     // Villa Pokémon
     wild: ['grimer', 'koffing', 'ponyta', 'growlithe', 'vulpix', 'magmar'],
     events: [{
@@ -298,7 +301,7 @@ export const KANTO: KantoLocation[] = [
 
   // ── verso la Lega (dopo 8 medaglie) ──
   {
-    id: 'percorso-23', name: 'Percorso 23', kind: 'route', x: 70, y: 280, badges: 8, level: 64,
+    id: 'percorso-23', weather: 'sabbia', name: 'Percorso 23', kind: 'route', x: 70, y: 280, badges: 8, level: 64,
     wild: ['spearow', 'ekans', 'sandshrew', 'mankey'],
     trainers: [{ id: 'blu-6', name: `${BLU} (Percorso 22)`, team: ['pidgey', 'growlithe', 'exeggcute', 'abra', 'squirtle', 'rhyhorn'], levelBonus: 1 }],
   },
