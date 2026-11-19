@@ -1059,6 +1059,13 @@ function careerStatsHtml(save: SaveData): string {
   </details>`;
 }
 
+/** Un Pokémon di un luogo, con la Poké Ball se l'hai già preso (in rosa, nel PC o in passato). */
+function wildMon(save: SaveData, k: string): string {
+  const got = save.dex.caught.includes(k);
+  const where = save.roster.some((p) => p.speciesKey === k) ? 'in rosa' : save.box.some((p) => p.speciesKey === k) ? 'nel PC di Bill' : 'già preso in passato';
+  return `<span class="wild-mon ${got ? 'got' : ''}" title="${esc(POKEDEX[k].name)}${got ? ` · ${where}` : ''}"><img src="${spriteUrl(POKEDEX[k].dex)}" alt="">${got ? '<span class="owned-ball"></span>' : ''}<small>${esc(POKEDEX[k].name)}</small></span>`;
+}
+
 /** Sfida del giorno e amichevole con un amico: partite fuori dalla carriera, senza esperienza. */
 function extraHtml(save: SaveData, state: HubState): string {
   const problem = lineupProblem(save);
@@ -1555,7 +1562,7 @@ function renderMap(main: HTMLElement, save: SaveData, ch: Challenges, actions: H
       const choices = eventChoices(save, ev);
       const again = save.events.includes(ev.id);
       const mons = choices
-        .map((k) => `<span class="wild-mon"><img src="${spriteUrl(POKEDEX[k].dex)}" alt=""><small>${esc(POKEDEX[k].name)}</small></span>`)
+        .map((k) => wildMon(save, k))
         .join('');
       const buttons = choices
         .map((k) => `<span class="event-play">
@@ -1579,7 +1586,7 @@ function renderMap(main: HTMLElement, save: SaveData, ch: Challenges, actions: H
       : `<section class="card"><h3>Allenatori</h3>${trainerList}</section>`;
   const wild = loc.wild.length
     ? `<section class="card"><h3>Pokémon selvatici</h3>
-        <div class="wild">${loc.wild.map((k) => `<span class="wild-mon"><img src="${spriteUrl(POKEDEX[k].dex)}" alt=""><small>${esc(POKEDEX[k].name)}</small></span>`).join('')}</div>
+        <div class="wild">${loc.wild.map((k) => wildMon(save, k)).join('')}</div>
       </section>`
     : '';
   const wildLevel = Math.round(ch.wild.roster.reduce((a, r) => a + r.inst.level, 0) / ch.wild.roster.length);

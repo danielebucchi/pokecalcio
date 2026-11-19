@@ -91,8 +91,9 @@ export interface RosterState {
   max: number;
   /** Chi si può lasciare andare (non chi è in formazione). */
   releasable: { uid: string; speciesKey: string; level: number; name: string }[];
-  /** Specie di tutta la rosa, per dire subito se ce n'è già uno uguale. */
+  /** Specie di tutta la rosa e del PC di Bill, per dire subito se ce n'è già uno uguale. */
   species: string[];
+  boxSpecies: string[];
 }
 
 /** Gioca la partita dentro `app`. Restituisce una funzione che ferma il ciclo. */
@@ -488,11 +489,13 @@ export function skipMatch(app: HTMLElement, teams: [TeamSetup, TeamSetup], cb: M
   showPostMatch(app, match, humanTeam, report, banner, cb.onLeave, offers ?? [], cb.recruit, cb.roster, achievements);
 }
 
-/** Poké Ball accanto al nome se in rosa c'è già la stessa specie (come nel Pokédex dei giochi). */
-function ownedBall(count: number): string {
+/** Poké Ball accanto al nome se hai già la stessa specie, in rosa o nel PC (come nel Pokédex dei giochi). */
+function ownedBall(inRoster: number, inBox: number): string {
+  const count = inRoster + inBox;
   if (!count) return '';
-  const title = `Ce l'hai già${count > 1 ? `: ne hai ${count}` : ''}`;
-  return ` <span class="owned-ball" title="${title}" aria-label="${title}"></span>${count > 1 ? `<small class="owned-count">×${count}</small>` : ''}`;
+  const where = inBox && !inRoster ? ' nel PC di Bill' : inBox ? ` (${inRoster} in rosa, ${inBox} nel PC)` : '';
+  const title = `Ce l'hai già${count > 1 ? `: ne hai ${count}` : ''}${where}`;
+  return ` <span class="owned-ball" title="${title}" aria-label="${title}"></span>${count > 1 ? `<small class="owned-count">×${count}</small>` : ''}${inBox && !inRoster ? '<small class="owned-count">PC</small>' : ''}`;
 }
 
 function showPostMatch(
@@ -509,7 +512,7 @@ function showPostMatch(
       <img src="${spriteUrl(sp.dex, o.inst.shiny)}" alt="">
       <div class="offer-body">
         ${o.inst.shiny ? '<span class="chip chip-lilac shiny-chip">✨ Shiny!</span>' : ''}
-        <span class="offer-title"><b>${esc(sp.name)}</b>${ownedBall(roster?.().species.filter((k) => k === o.inst.speciesKey).length ?? 0)} <small>Lv${o.inst.level}</small> ${sp.types.map((t) => `<span class="chip type-tag" data-type="${t}">${TYPE_NAMES[t]}</span>`).join(' ')}</span>
+        <span class="offer-title"><b>${esc(sp.name)}</b>${ownedBall(roster?.().species.filter((k) => k === o.inst.speciesKey).length ?? 0, roster?.().boxSpecies.filter((k) => k === o.inst.speciesKey).length ?? 0)} <small>Lv${o.inst.level}</small> ${sp.types.map((t) => `<span class="chip type-tag" data-type="${t}">${TYPE_NAMES[t]}</span>`).join(' ')}</span>
         <div class="pick-stats"><span>ATT <b>${g.att}</b></span><span>DIF <b>${g.dif}</b></span><span>VEL <b>${g.vel}</b></span><span>PV <b>${g.pv}</b></span>
           <span><span class="role role-${best}">${best}</span> voto ${Math.round(ratings[best])}</span></div>
         <small class="muted">Vuole unirsi a te: ${esc(o.reason)}.</small>
