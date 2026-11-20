@@ -20,6 +20,7 @@ import { renderHub, type ChallengeKind, type Challenges, type HubState } from '.
 import { runMatch, skipMatch, type MatchBanner } from './ui/matchScreen';
 import { renderStarterPick } from './ui/starters';
 import { installTypeInfo } from './ui/typeInfo';
+import { renderGuide } from './ui/guide';
 import { installPokeCard } from './ui/pokeCard';
 import { setupPwa } from './ui/pwa';
 
@@ -133,6 +134,9 @@ function showHub() {
       storeSave(save);
       hub.tab = 'map';
       showHub();
+    },
+    openGuide() {
+      renderGuide(app, () => showHub());
     },
     playDaily(skip) {
       if (lineupProblem(save)) return;
