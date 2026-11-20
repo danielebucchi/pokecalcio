@@ -26,7 +26,7 @@ import {
   type OwnedPokemon, type SaveData,
 } from '../game/save';
 import { MAX_TECHNIQUES, knows, type PokemonInstance, type Role } from '../game/stats';
-import { MAX_SUBS, type TeamSetup } from '../match/engine';
+import type { TeamSetup } from '../match/engine';
 import { clubTeam, evolvedForm, gymLevel, localWild } from '../match/teams';
 import { SIDE_MISSIONS, claimReward, missionComplete, rewardLabel } from '../game/rewards';
 import { BADGE_BONUS, BADGE_BONUS_PCT, TECHNIQUES, techniqueById, type TechniqueId } from '../game/techniques';
@@ -104,6 +104,8 @@ export interface HubActions {
   importSave(code: string): string | null;
   /** Sfida del giorno. */
   playDaily(skip?: boolean): void;
+  /** Pagina del regolamento. */
+  openGuide(): void;
   /** Amichevole contro la squadra di un amico (codice): null se parte, altrimenti il motivo. */
   playFriendly(code: string, skip?: boolean): string | null;
 }
@@ -199,6 +201,7 @@ export function renderHub(app: HTMLElement, save: SaveData, ch: Challenges, stat
     <main id="tab"></main>
     <footer class="hub-foot">
       ${savePanelHtml(save, state)}
+      <button class="link" data-open-guide>📖 Regolamento</button>
       <button class="link" data-save-panel="settings">⚙️ Impostazioni</button>
       <button class="link" data-save-panel="export">Esporta salvataggio</button>
       <button class="link" data-save-panel="import">Importa salvataggio</button>
@@ -231,6 +234,8 @@ export function renderHub(app: HTMLElement, save: SaveData, ch: Challenges, stat
     renderHub(app, save, ch, state, actions);
   });
   // esporta / importa: un pannello sopra i link in fondo
+  // regolamento (dal fondo della pagina e dalla mappa)
+  app.querySelectorAll<HTMLButtonElement>('[data-open-guide]').forEach((b) => (b.onclick = actions.openGuide));
   // installazione come app
   app.querySelector<HTMLButtonElement>('[data-install]')?.addEventListener('click', () => void promptInstall());
   app.querySelector<HTMLButtonElement>('[data-install-dismiss]')?.addEventListener('click', () => {
@@ -1658,28 +1663,11 @@ function renderMap(main: HTMLElement, save: SaveData, ch: Challenges, actions: H
       <h3>Medaglie <small>${save.badges}/${GYMS.length}</small>${eventsFound(save)}</h3>
       <div class="badges">${badges}</div>
     </section>
-    <details class="rules card">
-      <summary>Come funziona il gioco</summary>
-      <ul>
-        <li><b>Mappa</b>: ti sposti nei luoghi vicini; le medaglie aprono nuove zone come nei giochi e dalla Medaglia Tuono puoi volare nelle città già visitate. Sui percorsi ci sono allenatori da battere una volta e la partitella con i selvatici, ripetibile.</li>
-        <li><b>Sconfitta</b>: nessuno guadagna esperienza; col pareggio la metà.</li>
-        <li><b>Allenamento</b>: le sessioni per le statistiche (EV) arrivano 3 per ogni luogo nuovo, quelle che non usi restano. L'esperienza invece arriva giocando: grindando sali di livello, ma gli EV crescono solo viaggiando.</li>
-        <li><b>Tetto di livello</b>: si cresce fino a 2 livelli sopra la prossima palestra (68 prima della Lega), poi serve la medaglia. Da Campione il tetto sparisce.</li>
-        <li><b>Eventi nascosti</b>: come in Pokémon Giallo, in Kanto ci sono Pokémon speciali che qualcuno ti affida, una volta sola. Non sono segnati da nessuna parte: compaiono quando sei nel posto giusto al momento giusto (a volte dopo aver battuto un allenatore o con abbastanza medaglie) e vanno conquistati vincendo la loro sfida. Il contatore accanto alle medaglie ti dice quanti ne hai trovati.</li>
-        <li><b>Leggendari</b>: Zapdos alla Centrale Elettrica, Articuno alle Isole Spumarine, Moltres sulla Via Vittoria e Mewtwo nella Grotta Ignota (aperta dopo aver vinto la Lega). Guidano una squadra di selvatici: se vinci, chiedono di unirsi a te.</li>
-        <li><b>Nuovi Pokémon</b>: niente lotte né Poké Ball. Se vinci la partitella con i selvatici, di solito uno chiede di unirsi alla squadra e tu decidi se catturarlo. Chi evolve si convince più facilmente, i Pokémon già forti e rari molto meno, e conta anche come ha giocato contro di te. La rosa ha al massimo ${ROSTER_MAX} Pokémon: se è piena, per accettare ne lasci andare uno.</li>
-        <li><b>Palestre</b>: si battono in ordine, ognuna nella sua città; ognuna ha un tipo e un livello fisso. In campo ci sono sempre il suo asso e la sua contromossa (l'unico Pokémon di un altro tipo); gli altri li sceglie studiando la tua squadra (titolari e panchina), portando chi mette in difficoltà i tuoi tipi. Vincere dà la medaglia; in caso di pareggio si tirano i rigori.</li>
-        <li><b>Esperienza</b>: come nei giochi, un avversario di livello più alto rende di più; uno più debole di te rende poco.</li>
-        <li><b>Statistiche</b>: Attacco e Difesa sono il valore più alto tra fisico e speciale; Velocità è quanto corre; i PV sono la resistenza. Partono dalle statistiche di Bulbapedia e crescono con livello e allenamento.</li>
-        <li><b>Tipi</b>: contano molto. Il vantaggio dei giochi qui vale ×1.25 (lo svantaggio ×0.8) e pesa su contrasti, danni e parate: contro una palestra schiera chi ha il tipo giusto.</li>
-        <li><b>KO</b>: a 0 PV un Pokémon resta fermo per 6 minuti e rientra con metà dei PV; dal secondo KO solo con un quarto. Il portiere non va mai KO: stremato para peggio, ma resta in porta.</li>
-        <li><b>Falli</b>: chi entra con tanto Attacco e poca Difesa è irruento. In area è rigore, vicino alla porta punizione, lontano si riparte subito.</li>
-        <li><b>Calci piazzati</b>: rimesse laterali con i piedi come nel calcio a 5; sugli angoli e sui cross vince il duello aereo chi ha Difesa, PV e altezza.</li>
-        <li><b>Portiere</b>: para con Difesa, PV e Velocità; più è alto, più porta copre (Onix!).</li>
-        <li><b>Evoluzione</b>: la barra lilla si riempie con gol, assist, parate e contrasti vinti. Se il livello lo permette puoi evolvere, senza limiti. A fine gara tutti tornano allo stadio base.</li>
-        <li><b>Panchina e cambi</b>: in partita vanno 5 titolari e ${BENCH_MAX} riserve in panchina, scelte in Formazione. Al massimo ${MAX_SUBS} sostituzioni; chi esce non rientra. Utili per rimpiazzare un Pokémon KO o senza PV.</li>
-      </ul>
-    </details>`;
+    <section class="card rules-link">
+      <span class="ach-icon">📖</span>
+      <div><b>Come si gioca</b><small class="muted">Partite, statistiche, tipi, nature, MT, squadra, viaggio, palestre e Lega: tutto nel regolamento.</small></div>
+      <button data-open-guide>Apri il regolamento</button>
+    </section>`;
 
   // sul telefono la mappa è più larga dello schermo e scorre: si parte centrati su dove sei
   const centerMap = () => {
@@ -1692,6 +1680,7 @@ function renderMap(main: HTMLElement, save: SaveData, ch: Challenges, actions: H
     }
   };
   centerMap();
+  main.querySelector<HTMLButtonElement>('[data-open-guide]')?.addEventListener('click', actions.openGuide);
   // formazione consigliata contro la squadra della sfida
   main.querySelectorAll<HTMLButtonElement>('[data-suggest]').forEach((b) => {
     b.onclick = () => {
