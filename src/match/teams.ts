@@ -262,6 +262,9 @@ export function buildTrainerTeam(loc: KantoLocation, t: RouteTrainer): TeamSetup
   return teamFrom(t.name, t.name.startsWith('Rivale') ? '#5b8def' : '#8ec5d8', false, formation, lineup, bench);
 }
 
+/** Taratura delle sfide ai leggendari: scorta evoluta e livelli in più per tutti (oltre a quelli di ogni luogo). */
+export const LEGEND = { evolved: true, escortLevels: 0 };
+
 /**
  * Partita contro un leggendario nel suo luogo: lui (talento perfetto) guida una scorta di selvatici
  * della zona, allenati e al livello pieno del luogo. Il leggendario è sempre in campo.
@@ -271,8 +274,12 @@ export function buildLegendaryTeam(loc: KantoLocation): TeamSetup {
   const boss = createInstance(leg.key, Math.max(5, loc.level - leg.levelGap));
   boss.ivs = { hp: 31, atk: 31, def: 31, spa: 31, spd: 31, spe: 31 };
   const wild = localWild(loc);
-  // la sua scorta: 4 selvatici della zona pescati a caso, al livello pieno e allenati
-  const others = Array.from({ length: 4 }, () => trainedInstance(wild[Math.floor(Math.random() * wild.length)], loc.level, 0));
+  // la sua scorta: 4 selvatici della zona pescati a caso, già nella forma finale (Zapdos guida Raichu,
+  // non Pikachu), allenati e al livello del luogo
+  const others = Array.from({ length: 4 }, () => {
+    const k = wild[Math.floor(Math.random() * wild.length)];
+    return trainedInstance(LEGEND.evolved ? evolvedForm(k, 100) : k, loc.level + (leg.escortLevels ?? 0) + LEGEND.escortLevels, 0);
+  });
   const formation: FormationKey = 'rombo';
   // in campo tutti e cinque, il portiere è il più adatto
   const { lineup } = bestLineup([boss, ...others], formation);
