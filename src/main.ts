@@ -20,10 +20,13 @@ import { renderHub, type ChallengeKind, type Challenges, type HubState } from '.
 import { runMatch, skipMatch, type MatchBanner } from './ui/matchScreen';
 import { renderStarterPick } from './ui/starters';
 import { installTypeInfo } from './ui/typeInfo';
+import { installPokeCard } from './ui/pokeCard';
 import { setupPwa } from './ui/pwa';
 
 const app = document.getElementById('app')!;
 installTypeInfo();
+// scheda del Pokémon: si apre toccando lo sprite di un tuo Pokémon
+installPokeCard(() => save);
 // app installabile: quando cambia la possibilità di installare, si ridisegna il bottone
 setupPwa(() => {
   if (document.querySelector('.hub-foot')) showHub();

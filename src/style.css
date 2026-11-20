@@ -1091,3 +1091,32 @@ body .topbar { padding-top: calc(8px + env(safe-area-inset-top)); }
 .fly-list { margin-top: 12px; }
 .fly-list summary { padding: 6px 0; }
 .fly-list .places { margin-top: 8px; }
+.nature-line { display: block; color: var(--ink-soft); font-size: 0.78rem; }
+
+/* scheda del Pokémon */
+.poke-open { cursor: zoom-in; }
+.pk-overlay { position: fixed; inset: 0; z-index: 50; display: flex; align-items: center; justify-content: center; padding: 16px; background: rgba(20, 12, 32, 0.55); backdrop-filter: blur(4px); }
+.pk-card { width: min(720px, 100%); max-height: calc(100vh - 32px); overflow-y: auto; background: var(--bg); padding: 18px 20px; box-shadow: 0 30px 70px -20px rgba(0, 0, 0, 0.5); }
+.pk-head { display: flex; gap: 14px; align-items: center; }
+.pk-head img { width: 96px; height: 96px; image-rendering: pixelated; background: var(--lilac-soft); border-radius: 20px; flex: none; }
+.pk-head > div { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.pk-head h2 { margin: 0; }
+.pk-head .bar { width: 100%; }
+.pk-close { align-self: flex-start; padding: 0.3rem 0.65rem; }
+.pk-types { display: flex; gap: 4px; flex-wrap: wrap; }
+.pk-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 6px 22px; margin-top: 12px; }
+.pk-grid h4 { margin: 10px 0 6px; }
+.pk-grid p { margin: 4px 0; }
+.pk-stat { display: grid; grid-template-columns: 34px 1fr 36px; gap: 8px; align-items: center; font-size: 0.85rem; margin: 3px 0; }
+.pk-stat b { text-align: right; }
+.pk-stat .bar { height: 8px; }
+.pk-stat .bar i { display: block; height: 100%; border-radius: inherit; background: var(--grad-primary); }
+.pk-role { display: flex; align-items: center; gap: 8px; padding: 3px 0; font-size: 0.88rem; }
+.pk-role b { margin-left: auto; }
+.pk-role.best { font-weight: 700; }
+.pk-evo { font-size: 0.85rem; }
+@media (max-width: 700px) {
+  .pk-overlay { align-items: flex-end; padding: 0; }
+  .pk-card { border-radius: 24px 24px 0 0; max-height: 88vh; padding-bottom: calc(18px + env(safe-area-inset-bottom)); }
+  .pk-head img { width: 72px; height: 72px; }
+}

@@ -38,6 +38,8 @@ for (let g = 0; g < GYMS.length; g++) {
   const insts = candidates.map((k) => {
     const i: any = createInstance(k, lvl);
     i.ivs = { hp: 25, atk: 25, def: 25, spa: 25, spd: 25, spe: 25 };
+    // natura neutra: la rosa è una sola per palestra, una natura a caso sposterebbe tutte le partite
+    i.nature = 'hardy';
     const b = POKEDEX[k].base;
     i.evs[b.atk >= b.spa ? 'atk' : 'spa'] = Math.min(252, Math.ceil(evs / 2));
     i.evs[b.def >= b.spd ? 'def' : 'spd'] = Math.min(252, Math.floor(evs / 2));

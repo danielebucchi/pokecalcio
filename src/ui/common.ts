@@ -1,10 +1,32 @@
 import { POKEDEX, TYPE_NAMES, descendants } from '../data/pokedex';
+import { natureById } from '../game/natures';
 import { gameStats, reachOf, realStats, roleRatings, type PokemonInstance } from '../game/stats';
 import type { TeamSetup } from '../match/engine';
 import { spriteUrl } from './sprites';
 
 export const esc = (s: string) =>
   s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
+
+/**
+ * Natura e suo effetto vero su questo Pokémon, nelle 4 statistiche del gioco: "Decisa · ATT +10%".
+ * (ATT è il massimo tra Attacco e Attacco Speciale: una natura può toccare quello che non usa.)
+ */
+export function natureLabel(inst: PokemonInstance): string {
+  const n = natureById(inst.nature);
+  if (!n) return '';
+  const sp = POKEDEX[inst.speciesKey];
+  const withN = gameStats(realStats(sp, inst));
+  const without = gameStats(realStats(sp, { ...inst, nature: undefined }));
+  const names = { att: 'ATT', dif: 'DIF', vel: 'VEL', pv: 'PV' } as const;
+  const parts = (Object.keys(names) as (keyof typeof names)[])
+    .map((k) => {
+      const d = withN[k] / without[k] - 1;
+      // arrotondato a 5: per gli arrotondamenti della formula un +10% può risultare +9%
+      return Math.abs(d) < 0.02 ? '' : `${names[k]} ${d > 0 ? '+' : '−'}${Math.round(Math.abs(d) * 20) * 5}%`;
+    })
+    .filter(Boolean);
+  return `${n.name}${parts.length ? ` · ${parts.join(', ')}` : n.up ? ' · nessun effetto su di lui' : ' · neutra'}`;
+}
 
 export function statsOf(inst: PokemonInstance) {
   return gameStats(realStats(POKEDEX[inst.speciesKey], inst));

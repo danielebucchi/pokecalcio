@@ -654,7 +654,7 @@ function renderSquad(main: HTMLElement, save: SaveData, state: HubState, actions
           ? `<span class="chip chip-pink">in campo · ${formation.slots[at].role}</span>`
           : onBench.has(p.uid) ? '<span class="chip chip-sky">in panchina</span>' : '<span class="chip">in tribuna</span>';
       return `<button class="pick ${here ? 'current' : ''}" data-uid="${p.uid}">
-        <img src="${sprite(p)}" alt="">
+        <img class="poke-open" src="${sprite(p)}" alt="" data-poke="${p.uid}" title="Scheda di ${esc(plainName(p))}">
         <span class="pick-body">
           <span class="pick-title"><b>${nameOf(p)}</b> <small>Lv${p.level}</small> ${status}</span>
           <span class="pick-stats">${statLine(p)}</span>
@@ -812,7 +812,7 @@ function boxHtml(save: SaveData, state: HubState): string {
             .join('')}</div>`
         : '';
       return `<div class="reserve">
-        <img src="${sprite(p)}" alt="">
+        <img class="poke-open" src="${sprite(p)}" alt="" data-poke="${p.uid}" title="Scheda di ${esc(plainName(p))}">
         <span class="reserve-body"><b>${nameOf(p)}</b> <small>Lv${p.level}</small>
           <small class="muted"><span class="role role-${best}">${best}</span> voto ${Math.round(bestRating(p))}</small></span>
         ${lock ? '' : `<span class="reserve-actions"><button data-withdraw="${p.uid}">${picking ? 'Annulla' : 'Ritira'}</button></span>`}
@@ -861,7 +861,7 @@ function benchHtml(save: SaveData, bench: OwnedPokemon[], state: HubState): stri
     const { role: best } = bestRole(p);
     const confirm = state.releasing === p.uid;
     return `<div class="reserve ${inBench ? 'on-bench' : ''}">
-      <img src="${sprite(p)}" alt="">
+      <img class="poke-open" src="${sprite(p)}" alt="" data-poke="${p.uid}" title="Scheda di ${esc(plainName(p))}">
       <span class="reserve-body"><b>${nameOf(p)}</b> <small>Lv${p.level}</small>
         <small class="muted"><span class="role role-${best}">${best}</span> voto ${Math.round(bestRating(p))}</small></span>
       <span class="reserve-actions">
@@ -909,7 +909,7 @@ function renderTraining(main: HTMLElement, save: SaveData, state: HubState, acti
       .join('');
     return `<div class="tcard ${role ? '' : 'reserve'}">
       <div class="tc-head">
-        <img src="${sprite(p)}" alt="">
+        <img class="poke-open" src="${sprite(p)}" alt="" data-poke="${p.uid}" title="Scheda di ${esc(plainName(p))}">
         <div>
           ${state.renaming === p.uid
             ? `<span class="nick-edit"><input data-nick="${p.uid}" maxlength="12" value="${esc(p.nickname ?? '')}" placeholder="${esc(POKEDEX[p.speciesKey].name)}" autocomplete="off">
@@ -1036,7 +1036,7 @@ function careerStatsHtml(save: SaveData): string {
     .sort((a, b) => b.career!.goals - a.career!.goals || b.career!.assists - a.career!.assists || b.career!.matches - a.career!.matches)
     .map((p, i) => {
       const c = p.career!;
-      return `<tr><td>${i === 0 && c.goals ? '👑 ' : ''}<img class="mini-sprite" src="${sprite(p)}" alt="">${nameOf(p)}</td>
+      return `<tr><td>${i === 0 && c.goals ? '👑 ' : ''}<img class="mini-sprite poke-open" src="${sprite(p)}" alt="" data-poke="${p.uid}">${nameOf(p)}</td>
         <td>${c.matches}</td><td><b>${c.goals}</b></td><td>${c.assists}</td><td>${c.saves}</td></tr>`;
     })
     .join('');

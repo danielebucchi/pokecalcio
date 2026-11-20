@@ -1,4 +1,5 @@
 import type { TechniqueId } from './techniques';
+import { natureMult, randomNature } from './natures';
 import type { BaseStats, Species } from '../data/pokedex';
 
 export type Role = 'POR' | 'DIF' | 'CEN' | 'ATT';
@@ -20,6 +21,10 @@ export interface PokemonInstance {
   nickname?: string;
   /** Shiny: colori rari, solo da collezione (le statistiche sono le stesse). */
   shiny?: boolean;
+  /** Natura (vedi natures.ts): +10% a una statistica, −10% a un'altra. */
+  nature?: string;
+  /** Quando e dove si è unito a te. */
+  metAt?: { date: string; place: string };
 }
 
 /** Le 4 statistiche del gioco: tra fisico e speciale si prende il valore più alto. */
@@ -30,18 +35,19 @@ export interface GameStats {
   pv: number;
 }
 
-/** Formula ufficiale delle statistiche (senza natura). */
+/** Formula ufficiale delle statistiche, con la natura. */
 export function realStats(sp: Species, inst: PokemonInstance): BaseStats {
   const L = inst.level;
   const calc = (k: keyof BaseStats) =>
     Math.floor(((2 * sp.base[k] + inst.ivs[k] + Math.floor(inst.evs[k] / 4)) * L) / 100);
+  const other = (k: keyof BaseStats) => Math.floor((calc(k) + 5) * natureMult(inst.nature, k));
   return {
     hp: calc('hp') + L + 10,
-    atk: calc('atk') + 5,
-    def: calc('def') + 5,
-    spa: calc('spa') + 5,
-    spd: calc('spd') + 5,
-    spe: calc('spe') + 5,
+    atk: other('atk'),
+    def: other('def'),
+    spa: other('spa'),
+    spd: other('spd'),
+    spe: other('spe'),
   };
 }
 
@@ -93,5 +99,6 @@ export function createInstance(speciesKey: string, level: number): PokemonInstan
     level,
     ivs: { hp: iv(), atk: iv(), def: iv(), spa: iv(), spd: iv(), spe: iv() },
     evs: { hp: 0, atk: 0, def: 0, spa: 0, spd: 0, spe: 0 },
+    nature: randomNature(),
   };
 }
