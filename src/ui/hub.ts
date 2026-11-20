@@ -27,7 +27,7 @@ import {
 } from '../game/save';
 import { MAX_TECHNIQUES, knows, type PokemonInstance, type Role } from '../game/stats';
 import { MAX_SUBS, type TeamSetup } from '../match/engine';
-import { clubTeam, evolvedForm, gymLevel } from '../match/teams';
+import { clubTeam, evolvedForm, gymLevel, localWild } from '../match/teams';
 import { SIDE_MISSIONS, claimReward, missionComplete, rewardLabel } from '../game/rewards';
 import { BADGE_BONUS, BADGE_BONUS_PCT, TECHNIQUES, techniqueById, type TechniqueId } from '../game/techniques';
 import { esc, evoLine, teamTable } from './common';
@@ -1584,11 +1584,10 @@ function renderMap(main: HTMLElement, save: SaveData, ch: Challenges, actions: H
     : allBeaten
       ? `<details class="card trainers-done"><summary><h3>Allenatori <small>tutti battuti ✓</small></h3></summary>${trainerList}</details>`
       : `<section class="card"><h3>Allenatori</h3>${trainerList}</section>`;
-  const wild = loc.wild.length
-    ? `<section class="card"><h3>Pokémon selvatici</h3>
-        <div class="wild">${loc.wild.map((k) => wildMon(save, k)).join('')}</div>
-      </section>`
-    : '';
+  // nelle città senza selvatici propri la partitella si gioca con quelli dei luoghi vicini: si mostrano quelli
+  const wild = `<section class="card"><h3>Pokémon selvatici${loc.wild.length ? '' : ' <small>dei dintorni</small>'}</h3>
+      <div class="wild">${localWild(loc).map((k) => wildMon(save, k)).join('')}</div>
+    </section>`;
   const wildLevel = Math.round(ch.wild.roster.reduce((a, r) => a + r.inst.level, 0) / ch.wild.roster.length);
   const wildAll = [...ch.wild.roster.map((r) => r.inst), ...(ch.wild.bench ?? [])];
   const wildShiny = wildAll.find((i) => i.shiny);

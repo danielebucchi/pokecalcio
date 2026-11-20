@@ -220,10 +220,14 @@ export function simulateMatch(a: TeamSetup, b: TeamSetup, knockout: boolean): Ma
   return m;
 }
 
-/** Pokémon selvatici di un luogo; nelle città senza selvatici si usano quelli dei luoghi vicini. */
-function localWild(loc: KantoLocation): string[] {
+/**
+ * Pokémon selvatici di un luogo; nelle città senza selvatici si usano quelli dei luoghi vicini già
+ * aperti a quel punto del viaggio (non chiedono più medaglie della città, né il titolo di Campione).
+ */
+export function localWild(loc: KantoLocation): string[] {
   if (loc.wild.length) return loc.wild;
-  const around = [...new Set(neighbors(loc.id).flatMap((n) => locationById(n).wild))];
+  const open = neighbors(loc.id).map(locationById).filter((n) => n.badges <= loc.badges && !n.requiresChampion);
+  const around = [...new Set(open.flatMap((n) => n.wild))];
   return around.length ? around : ['pidgey', 'rattata'];
 }
 
