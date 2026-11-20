@@ -3,7 +3,7 @@ import type { GameStats } from './stats';
 /**
  * Premi delle medaglie, come in Rosso/Blu.
  * - Tecniche (le "MT"): ogni medaglia ne dà una da insegnare a un Pokémon, per sempre. Come le MT
- *   della prima generazione sono monouso: una tecnica va a un solo Pokémon, e un Pokémon ne impara una.
+ *   della prima generazione sono monouso: una tecnica va a un solo Pokémon, che ne impara fino a quattro.
  * - Bonus alla squadra: quattro medaglie alzano una statistica di tutta la squadra in partita
  *   (Sasso l'Attacco, Tuono la Velocità, Anima la Difesa, Vulcano lo Speciale, che qui sono i PV).
  */
