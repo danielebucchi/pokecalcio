@@ -70,7 +70,7 @@ function challenges(): Challenges {
     // i selvatici stanno al massimo un livello sotto i tuoi titolari (nei luoghi già superati)
     wild: cached(`wild:${loc.id}`, () => buildWildTeam(loc, lineupLevel())),
     legendary: loc.legendary && !save.legendaries.includes(loc.legendary.key)
-      ? cached(`legendary:${loc.id}`, () => buildLegendaryTeam(loc))
+      ? cached(`legendary:${loc.id}`, () => buildLegendaryTeam(loc, lineupLevel()))
       : null,
     league,
     // vinto il torneo, manca il Campione Blu
