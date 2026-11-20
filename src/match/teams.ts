@@ -272,16 +272,19 @@ export const LEGEND = { evolved: true, escortLevels: 0 };
  * Partita contro un leggendario nel suo luogo: lui (talento perfetto) guida una scorta di selvatici
  * della zona, allenati e al livello pieno del luogo. Il leggendario è sempre in campo.
  */
-export function buildLegendaryTeam(loc: KantoLocation): TeamSetup {
+export function buildLegendaryTeam(loc: KantoLocation, playerLevel = 0): TeamSetup {
   const leg = loc.legendary!;
-  const boss = createInstance(leg.key, Math.max(5, loc.level - leg.levelGap));
+  // dopo il titolo (Mewtwo) non c'è più il tetto di livello: il leggendario e la scorta crescono con
+  // i tuoi titolari, altrimenti a Lv 90 vinceresti quasi sempre. Prima della Lega il tetto basta.
+  const base = loc.requiresChampion ? Math.max(loc.level, Math.round(playerLevel)) : loc.level;
+  const boss = createInstance(leg.key, Math.max(5, Math.min(100, base - leg.levelGap)));
   boss.ivs = { hp: 31, atk: 31, def: 31, spa: 31, spd: 31, spe: 31 };
   const wild = localWild(loc);
   // la sua scorta: 4 selvatici della zona pescati a caso, già nella forma finale (Zapdos guida Raichu,
   // non Pikachu), allenati e al livello del luogo
   const others = Array.from({ length: 4 }, () => {
     const k = wild[Math.floor(Math.random() * wild.length)];
-    return trainedInstance(LEGEND.evolved ? evolvedForm(k, 100) : k, loc.level + (leg.escortLevels ?? 0) + LEGEND.escortLevels, 0);
+    return trainedInstance(LEGEND.evolved ? evolvedForm(k, 100) : k, base + (leg.escortLevels ?? 0) + LEGEND.escortLevels, 0);
   });
   const formation: FormationKey = 'rombo';
   // in campo tutti e cinque, il portiere è il più adatto
