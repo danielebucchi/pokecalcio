@@ -3,7 +3,7 @@ import type { TeamSetup } from '../match/engine';
 import { teamFrom } from '../match/teams';
 import { FORMATIONS, type FormationKey } from './formations';
 import { benchOf, findOwned, fromBase64, toBase64, type SaveData } from './save';
-import type { PokemonInstance } from './stats';
+import { MAX_TECHNIQUES, type PokemonInstance } from './stats';
 import { TECHNIQUES, badgeBonus, type TechniqueId } from './techniques';
 
 /**
@@ -18,6 +18,8 @@ interface CodeMon {
   l: number;
   iv: Stats6;
   ev: Stats6;
+  /** Tecniche (vecchi codici: `t`, una sola). */
+  ts?: TechniqueId[];
   t?: TechniqueId;
   n?: string;
   s?: boolean;
@@ -36,7 +38,7 @@ const KEYS = ['hp', 'atk', 'def', 'spa', 'spd', 'spe'] as const;
 const pack = (p: PokemonInstance): CodeMon => ({
   k: p.speciesKey, l: p.level,
   iv: KEYS.map((k) => p.ivs[k]) as Stats6, ev: KEYS.map((k) => p.evs[k]) as Stats6,
-  ...(p.technique ? { t: p.technique } : {}), ...(p.nickname ? { n: p.nickname } : {}), ...(p.shiny ? { s: true } : {}),
+  ...(p.techniques?.length ? { ts: p.techniques } : {}), ...(p.nickname ? { n: p.nickname } : {}), ...(p.shiny ? { s: true } : {}),
 });
 
 /** Il codice della tua squadra attuale. */
@@ -53,7 +55,8 @@ const valid = (m: CodeMon) =>
   !!POKEDEX[m?.k] && Number.isInteger(m.l) && m.l >= 1 && m.l <= 100 &&
   Array.isArray(m.iv) && m.iv.length === 6 && m.iv.every((v) => Number.isInteger(v) && v >= 0 && v <= 31) &&
   Array.isArray(m.ev) && m.ev.length === 6 && m.ev.every((v) => Number.isInteger(v) && v >= 0 && v <= 252) &&
-  m.ev.reduce((a, b) => a + b, 0) <= 510 && (!m.t || TECHNIQUES.some((t) => t.id === m.t));
+  m.ev.reduce((a, b) => a + b, 0) <= 510 && (!m.t || TECHNIQUES.some((t) => t.id === m.t)) &&
+  (!m.ts || (Array.isArray(m.ts) && m.ts.length <= MAX_TECHNIQUES && m.ts.every((id) => TECHNIQUES.some((t) => t.id === id))));
 
 const stats6 = (v: Stats6): PokemonInstance['ivs'] => ({ hp: v[0], atk: v[1], def: v[2], spa: v[3], spd: v[4], spe: v[5] });
 
@@ -61,7 +64,7 @@ const unpack = (m: CodeMon, i: number): PokemonInstance => ({
   uid: `amico-${i}-${m.k}`, speciesKey: m.k, level: m.l,
   ivs: stats6(m.iv),
   evs: stats6(m.ev),
-  technique: m.t, nickname: typeof m.n === 'string' ? m.n.slice(0, 16) : undefined, shiny: m.s === true,
+  techniques: [...new Set([...(m.ts ?? []), ...(m.t ? [m.t] : [])])], nickname: typeof m.n === 'string' ? m.n.slice(0, 16) : undefined, shiny: m.s === true,
 });
 
 /** La squadra dell'amico pronta da sfidare, oppure il motivo per cui il codice non va. */

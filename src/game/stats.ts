@@ -12,7 +12,9 @@ export interface PokemonInstance {
   ivs: BaseStats;
   /** Allenamento specifico (max 252 per stat, 510 totali), come nei giochi. */
   evs: BaseStats;
-  /** Tecnica imparata con una medaglia (vedi techniques.ts), per sempre. */
+  /** Tecniche imparate con le MT delle medaglie (vedi techniques.ts), per sempre. */
+  techniques?: TechniqueId[];
+  /** Vecchi salvataggi: una sola tecnica (loadSave la sposta in `techniques`). */
   technique?: TechniqueId;
   /** Soprannome dato dall'allenatore (vuoto = nome della specie). */
   nickname?: string;
@@ -75,6 +77,12 @@ export function roleRatings(g: GameStats, heightDm: number): Record<Role, number
     ATT: 0.6 * g.att + 0.25 * g.vel + 0.15 * g.pv,
   };
 }
+
+/** Il Pokémon conosce questa tecnica? */
+export const knows = (p: PokemonInstance, id: TechniqueId) => !!p.techniques?.includes(id);
+
+/** Quante MT può imparare un Pokémon, come le quattro mosse dei giochi. */
+export const MAX_TECHNIQUES = 4;
 
 export function createInstance(speciesKey: string, level: number): PokemonInstance {
   const iv = () => Math.floor(Math.random() * 32);

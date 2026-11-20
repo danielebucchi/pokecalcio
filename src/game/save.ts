@@ -4,7 +4,7 @@ import { registerCaught, type Dex } from './dex';
 import { TECHNIQUES, type TechniqueId } from './techniques';
 import { KANTO, RIVAL_STEPS, locationById, type KantoLocation, type PlaceEvent, type RouteTrainer } from './kanto';
 import type { LeagueRun } from './league';
-import { createInstance, gameStats, realStats, roleRatings, type PokemonInstance, type Role } from './stats';
+import { MAX_TECHNIQUES, createInstance, gameStats, knows, realStats, roleRatings, type PokemonInstance, type Role } from './stats';
 
 /** Pokémon della rosa: resta sempre nella forma base, l'evoluzione esiste solo in partita. */
 export interface OwnedPokemon extends PokemonInstance {
@@ -213,6 +213,11 @@ export function loadSave(): SaveData {
         data.history ??= [];
         data.achievements ??= [];
         data.box ??= [];
+        // una tecnica sola → elenco di tecniche
+        for (const p of [...data.roster, ...data.box]) {
+          if (p.technique) p.techniques = [...new Set([...(p.techniques ?? []), p.technique])];
+          delete p.technique;
+        }
         // carriere di prima del Campione Blu: chi aveva già vinto la Lega l'ha battuto
         if (data.league?.champion === 'you' && !data.league.championMatch) data.league.championMatch = data.titles ? 'won' : 'pending';
         data.dex ??= { seen: data.roster.map((p) => p.speciesKey), caught: data.roster.map((p) => p.speciesKey) };
@@ -404,11 +409,11 @@ export function addToRoster(save: SaveData, inst: PokemonInstance, releaseUid?: 
 export const techniquesAvailable = (save: SaveData) =>
   TECHNIQUES.filter((t) => t.badge < save.badges && !save.techniquesUsed.includes(t.id));
 
-/** Insegna una tecnica a un Pokémon della rosa: per sempre, e il Pokémon ne impara una sola. */
+/** Insegna una tecnica a un Pokémon della rosa, per sempre: ne impara fino a MAX_TECHNIQUES. */
 export function teachTechnique(save: SaveData, id: TechniqueId, uid: string): boolean {
   const p = findOwned(save, uid);
-  if (!p || p.technique || !techniquesAvailable(save).some((t) => t.id === id)) return false;
-  p.technique = id;
+  if (!p || knows(p, id) || (p.techniques?.length ?? 0) >= MAX_TECHNIQUES || !techniquesAvailable(save).some((t) => t.id === id)) return false;
+  (p.techniques ??= []).push(id);
   save.techniquesUsed.push(id);
   return true;
 }

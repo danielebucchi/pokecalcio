@@ -1,6 +1,6 @@
 import { POKEDEX, bst, type PokeType } from '../data/pokedex';
 import {
-  gameStats, headerRating, keeperRating, reachOf, realStats, roleRatings,
+  gameStats, headerRating, keeperRating, knows, reachOf, realStats, roleRatings,
   type GameStats, type PokemonInstance, type Role,
 } from '../game/stats';
 import { typeMultiplier } from '../game/typechart';
@@ -409,7 +409,7 @@ export class Match {
     const g: GameStats = {
       att: Math.round(base.att * (bonus.att ?? 1) * wx.att),
       dif: Math.round(base.dif * (bonus.dif ?? 1) * wx.dif),
-      vel: Math.round(base.vel * (bonus.vel ?? 1) * (p.inst.technique === 'scatto' ? 1.1 : 1)),
+      vel: Math.round(base.vel * (bonus.vel ?? 1) * (knows(p.inst, 'scatto') ? 1.1 : 1)),
       pv: Math.round(base.pv * (bonus.pv ?? 1)),
     };
     const ratio = keepHpRatio && p.maxHp > 0 ? p.hp / p.maxHp : 1;
@@ -450,7 +450,7 @@ export class Match {
     this.time += dt;
     // tecnica Rigenerazione: recupera il 2% dei PV per minuto di gioco
     for (const p of this.players) {
-      if (p.inst.technique === 'rigenerazione' && isActive(p)) p.hp = Math.min(p.maxHp, p.hp + (p.maxHp * 0.02 * dt) / SIM_PER_MINUTE);
+      if (knows(p.inst, 'rigenerazione') && isActive(p)) p.hp = Math.min(p.maxHp, p.hp + (p.maxHp * 0.02 * dt) / SIM_PER_MINUTE);
     }
     if (!this.halftimeDone && this.time >= MATCH_SECONDS / 2) {
       this.halftimeDone = true;
@@ -881,7 +881,7 @@ export class Match {
     const speed = opts.speed ?? 28 + p.stats.att * 0.22 * this.pace;
     const ang = Math.atan2(ty - this.ball.y, tx - this.ball.x);
     this.release(p, Math.cos(ang) * speed, Math.sin(ang) * speed);
-    const power = (opts.power ?? p.stats.att) * (0.85 + Math.random() * 0.3) * (p.inst.technique === 'potenza' ? 1.12 : 1);
+    const power = (opts.power ?? p.stats.att) * (0.85 + Math.random() * 0.3) * (knows(p.inst, 'potenza') ? 1.12 : 1);
     this.ball.shot = { shooter: p, power, tried: new Set([p.id]), from: opts.from };
     this.lastFinish = { shooter: p, from: opts.from, time: this.time };
     p.pickupCd = 0.5;
@@ -989,7 +989,7 @@ export class Match {
 
     b.shot.tried.add(k.id);
     const par = keeperRating(k.stats) * typeMultiplier(k.types, shooter.types) * (0.7 + (0.3 * k.hp) / k.maxHp)
-      * (k.inst.technique === 'riflessi' ? 1.15 : 1) * (shooter.inst.technique === 'giro' ? 0.85 : 1);
+      * (knows(k.inst, 'riflessi') ? 1.15 : 1) * (knows(shooter.inst, 'giro') ? 0.85 : 1);
     const edge = 1 - 0.35 * (d / k.reach);
     // sul rigore il portiere deve indovinare l'angolo
     const guess = b.shot.from === 'penalty' ? 0.45 : 1;
@@ -1089,7 +1089,7 @@ export class Match {
   // ───────────────────────────── calci piazzati ─────────────────────────────
 
   private headerOf(p: Player): number {
-    return headerRating(p.stats, p.heightDm) * (p.inst.technique === 'testa' ? 1.2 : 1);
+    return headerRating(p.stats, p.heightDm) * (knows(p.inst, 'testa') ? 1.2 : 1);
   }
 
   private outfield(team: 0 | 1, except?: Player): Player[] {
@@ -1341,7 +1341,7 @@ export class Match {
   private duel(o: Player, q: Player) {
     const hpO = 0.6 + (0.4 * o.hp) / o.maxHp;
     const hpQ = 0.6 + (0.4 * q.hp) / q.maxHp;
-    const defPow = q.stats.dif * typeMultiplier(q.types, o.types) * hpQ * (q.inst.technique === 'pressing' ? 1.15 : 1);
+    const defPow = q.stats.dif * typeMultiplier(q.types, o.types) * hpQ * (knows(q.inst, 'pressing') ? 1.15 : 1);
     const attPow = o.stats.att * typeMultiplier(o.types, q.types) * hpO * 1.15;
     o.duelCd = q.duelCd = 1;
     // chi entra con tanto ATT e poca DIF è irruento e fa più falli
@@ -1384,7 +1384,7 @@ export class Match {
   /** Formula dei danni Pokémon semplificata (potenza 28, rapporto ATT/DIF attenuato). */
   private damage(attacker: Player, target: Player, mult: number) {
     if (!isActive(target)) return;
-    if (target.inst.technique === 'muro') mult *= 0.75;
+    if (knows(target.inst, 'muro')) mult *= 0.75;
     const L = attacker.inst.level;
     const raw = (((2 * L) / 5 + 2) * 28 * Math.sqrt(attacker.stats.att / target.stats.dif)) / 50 + 1;
     target.hp -= raw * typeMultiplier(attacker.types, target.types) * (0.85 + Math.random() * 0.15) * mult;

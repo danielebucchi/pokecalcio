@@ -25,7 +25,7 @@ import {
   BENCH_MAX, ROSTER_MAX, SESSIONS_PER_PLACE, autoBench, autoLineup, benchOf, bestRating, bestRole, eventChoices, eventState, eventsFound as eventsTaken, exportSave, releasable, depositPokemon, undoDeposit, boxLock, withdrawPokemon, TO_BOX, rivalGate, teachTechnique, techniquesAvailable, trainerById as routeTrainer, findOwned, lineupProblem, ratingsOf,
   type OwnedPokemon, type SaveData,
 } from '../game/save';
-import type { PokemonInstance, Role } from '../game/stats';
+import { MAX_TECHNIQUES, knows, type PokemonInstance, type Role } from '../game/stats';
 import { MAX_SUBS, type TeamSetup } from '../match/engine';
 import { clubTeam, evolvedForm, gymLevel } from '../match/teams';
 import { SIDE_MISSIONS, claimReward, missionComplete, rewardLabel } from '../game/rewards';
@@ -918,7 +918,7 @@ function renderTraining(main: HTMLElement, save: SaveData, state: HubState, acti
                <button class="link nick-btn" data-nick-open="${p.uid}" title="Dai un soprannome">✎</button>`}
           <small>Lv${p.level}</small>
           ${role ? `<span class="role role-${role}">${role}</span>` : '<span class="chip">riserva</span>'}
-          ${p.technique ? `<span class="chip chip-star" title="${esc(techniqueById(p.technique)!.description)}">MT ${esc(techniqueById(p.technique)!.name)}</span>` : ''}
+          ${(p.techniques ?? []).map((id) => `<span class="chip chip-star" title="${esc(techniqueById(id)!.description)}">MT ${esc(techniqueById(id)!.name)}</span>`).join(' ')}
           ${p.career?.matches ? `<small class="muted career-line">${p.career.matches} pres. · ${p.career.goals} gol · ${p.career.assists} assist${p.career.saves ? ` · ${p.career.saves} parate` : ''}</small>` : ''}
           <div class="bar exp" title="Esperienza verso il livello ${p.level + 1}"><i style="width:${expPct}%"></i></div>
           <small>${p.level >= MAX_LEVEL ? 'livello massimo' : capped ? `al tetto: sale con la prossima medaglia` : `${p.exp}/${expToNext(p.level)} esperienza`}</small>
@@ -1189,10 +1189,10 @@ function bonusLine(save: SaveData): string {
 
 /** Tecniche delle medaglie (le "MT"): da insegnare, già insegnate o ancora da vincere. */
 function techniquesHtml(save: SaveData, state: HubState): string {
-  const learners = save.roster.filter((p) => !p.technique);
+  const learners = save.roster.filter((p) => (p.techniques?.length ?? 0) < MAX_TECHNIQUES);
   const rows = TECHNIQUES.map((t) => {
     const gym = GYMS[t.badge];
-    const owner = save.roster.find((p) => p.technique === t.id);
+    const owner = [...save.roster, ...save.box].find((p) => knows(p, t.id));
     let right: string;
     if (t.badge >= save.badges) right = `<span class="chip">🔒 ${esc(gym.badge)}</span>`;
     else if (owner) right = `<span class="chip chip-mint">Insegnata a ${nameOf(owner)}</span>`;
@@ -1217,10 +1217,10 @@ function techniquesHtml(save: SaveData, state: HubState): string {
               const role = slotRole(save, p.uid);
               return `<button class="teach-pick" data-teach-pick="${t.id}:${p.uid}">
                 <img src="${sprite(p)}" alt=""><b>${nameOf(p)}</b>
-                <small>${role ? `<span class="role role-${role}">${role}</span>` : 'riserva'} Lv${p.level}</small>
+                <small>${role ? `<span class="role role-${role}">${role}</span>` : 'riserva'} Lv${p.level}${p.techniques?.length ? ` · MT ${p.techniques.length}/${MAX_TECHNIQUES}` : ''}</small>
               </button>`;
             })
-            .join('') || '<p class="muted">Tutti i tuoi Pokémon hanno già una tecnica.</p>'}</div>`;
+            .join('') || `<p class="muted">Tutti i tuoi Pokémon conoscono già ${MAX_TECHNIQUES} tecniche.</p>`}</div>`;
     }
     return `<div class="technique ${t.badge >= save.badges ? 'locked' : ''}" title="${esc(t.description)}">
       <span class="tech-body"><b>${esc(t.name)}</b> <small class="muted">${esc(t.description)}</small></span>
@@ -1234,7 +1234,7 @@ function techniquesHtml(save: SaveData, state: HubState): string {
     <summary><b>MT delle medaglie</b> <small class="muted">${save.techniquesUsed.length}/${TECHNIQUES.length} insegnate</small>
       ${todo ? `<span class="badge" title="Tecniche da insegnare">${todo}</span>` : ''}</summary>
     <div class="tech-list">${rows}</div>
-    <small class="muted">Come le MT: la insegni a un Pokémon e resta sua per sempre; ognuno ne impara una.</small>
+    <small class="muted">Come le MT di Rosso/Blu: ognuna si usa una volta sola e resta per sempre al Pokémon a cui la insegni; un Pokémon ne impara fino a ${MAX_TECHNIQUES}, come le sue quattro mosse.</small>
   </details>`;
 }
 
