@@ -2,7 +2,7 @@ import type { GameStats } from './stats';
 
 /**
  * Nature, come nei giochi ma sulle quattro statistiche del calcio: ognuna alza del 10% Attacco, Difesa,
- * Velocità o Resistenza (PV) e ne abbassa un'altra del 10%; cinque sono neutre. Nomi italiani ufficiali,
+ * Velocità o Resistenza (PV) e ne abbassa un'altra del 10%; due sono neutre. Nomi italiani ufficiali,
  * scelti tra le nature dei giochi con lo stesso significato (Timida: più veloce, meno attacco).
  */
 type Stat = keyof GameStats;
@@ -19,8 +19,7 @@ const ROWS: [string, string, Stat | null, Stat | null][] = [
   ['bold', 'Sicura', 'dif', 'att'], ['relaxed', 'Placida', 'dif', 'vel'], ['impish', 'Scaltra', 'dif', 'pv'],
   ['timid', 'Timida', 'vel', 'att'], ['hasty', 'Lesta', 'vel', 'dif'], ['jolly', 'Allegra', 'vel', 'pv'],
   ['calm', 'Calma', 'pv', 'att'], ['gentle', 'Gentile', 'pv', 'dif'], ['sassy', 'Vivace', 'pv', 'vel'],
-  ['hardy', 'Ardita', null, null], ['docile', 'Docile', null, null], ['serious', 'Seria', null, null],
-  ['bashful', 'Ritrosa', null, null], ['quirky', 'Furba', null, null],
+  ['hardy', 'Ardita', null, null], ['docile', 'Docile', null, null],
 ];
 
 export const NATURES: Nature[] = ROWS.map(([id, name, up, down]) => ({ id, name, ...(up ? { up } : {}), ...(down ? { down } : {}) }));
