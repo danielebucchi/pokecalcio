@@ -4,6 +4,7 @@ import { registerCaught, type Dex } from './dex';
 import { TECHNIQUES, type TechniqueId } from './techniques';
 import { KANTO, RIVAL_STEPS, locationById, type KantoLocation, type PlaceEvent, type RouteTrainer } from './kanto';
 import type { LeagueRun } from './league';
+import { randomNeutralNature } from './natures';
 import { MAX_TECHNIQUES, createInstance, gameStats, knows, realStats, roleRatings, type PokemonInstance, type Role } from './stats';
 
 /** Pokémon della rosa: resta sempre nella forma base, l'evoluzione esiste solo in partita. */
@@ -188,7 +189,8 @@ export function chooseStarters(save: SaveData, keys: string[], shiny: string[] =
     i += g.count;
   }
   if (keys.length !== STARTER_COUNT) throw new Error('Scegli 5 Pokémon');
-  save.roster = keys.map((key) => ({ ...createInstance(key, STARTER_LEVEL), exp: 0, ...(shiny.includes(key) ? { shiny: true } : {}) }));
+  const metAt = { date: new Date().toISOString(), place: 'squadra iniziale' };
+  save.roster = keys.map((key) => ({ ...createInstance(key, STARTER_LEVEL), exp: 0, metAt, ...(shiny.includes(key) ? { shiny: true } : {}) }));
   for (const k of keys) registerCaught(save, k, shiny.includes(k));
   save.formation = 'quadrato';
   save.lineup = save.roster.map((p) => p.uid);
@@ -213,8 +215,9 @@ export function loadSave(): SaveData {
         data.history ??= [];
         data.achievements ??= [];
         data.box ??= [];
-        // una tecnica sola → elenco di tecniche
+        // una tecnica sola → elenco di tecniche; chi è nato prima delle nature ne riceve una neutra
         for (const p of [...data.roster, ...data.box]) {
+          p.nature ??= randomNeutralNature();
           if (p.technique) p.techniques = [...new Set([...(p.techniques ?? []), p.technique])];
           delete p.technique;
         }
@@ -390,15 +393,16 @@ export const TO_BOX = 'box';
  * (`TO_BOX`). Se in panchina c'è posto, ci va subito. Restituisce false se non c'è spazio.
  */
 export function addToRoster(save: SaveData, inst: PokemonInstance, releaseUid?: string): boolean {
+  const metAt = { date: new Date().toISOString(), place: locationById(save.location).name };
   if (releaseUid === TO_BOX) {
     if (save.box.some((p) => p.uid === inst.uid)) return false;
-    save.box.push({ ...inst, exp: 0 });
+    save.box.push({ ...inst, exp: 0, metAt });
     registerCaught(save, inst.speciesKey, inst.shiny);
     return true;
   }
   if (releaseUid) depositPokemon(save, releaseUid);
   if (save.roster.length >= ROSTER_MAX || save.roster.some((p) => p.uid === inst.uid)) return false;
-  save.roster.push({ ...inst, exp: 0 });
+  save.roster.push({ ...inst, exp: 0, metAt });
   registerCaught(save, inst.speciesKey, inst.shiny);
   save.bench = benchOf(save).map((p) => p.uid);
   if (save.bench.length < BENCH_MAX) save.bench.push(inst.uid);

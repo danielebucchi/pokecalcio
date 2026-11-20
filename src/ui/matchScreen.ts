@@ -9,7 +9,7 @@ import { Renderer } from '../match/renderer';
 import { WEATHER, weatherText, type Weather } from '../game/weather';
 import { closeCoach, coach, type CoachStep } from './coach';
 import { ReplayRecorder, clipDuration, frameAt, type Snapshot } from '../match/replay';
-import { esc } from './common';
+import { esc, natureLabel } from './common';
 import { medalHtml, spriteUrl } from './sprites';
 import {
   canVibrate, musicEnabled, playSfx, setMusic, setSfx, setVibe, sfxEnabled, startMusic, stopMusic, vibeEnabled, vibrate, type Sfx,
@@ -515,6 +515,7 @@ function showPostMatch(
         <span class="offer-title"><b>${esc(sp.name)}</b>${ownedBall(roster?.().species.filter((k) => k === o.inst.speciesKey).length ?? 0, roster?.().boxSpecies.filter((k) => k === o.inst.speciesKey).length ?? 0)} <small>Lv${o.inst.level}</small> ${sp.types.map((t) => `<span class="chip type-tag" data-type="${t}">${TYPE_NAMES[t]}</span>`).join(' ')}</span>
         <div class="pick-stats"><span>ATT <b>${g.att}</b></span><span>DIF <b>${g.dif}</b></span><span>VEL <b>${g.vel}</b></span><span>PV <b>${g.pv}</b></span>
           <span><span class="role role-${best}">${best}</span> voto ${Math.round(ratings[best])}</span></div>
+        ${o.inst.nature ? `<small class="nature-line">Natura ${esc(natureLabel(o.inst))}</small>` : ''}
         <small class="muted">Vuole unirsi a te: ${esc(o.reason)}.</small>
 
       </div>

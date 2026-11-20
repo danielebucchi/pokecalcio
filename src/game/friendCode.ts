@@ -3,6 +3,7 @@ import type { TeamSetup } from '../match/engine';
 import { teamFrom } from '../match/teams';
 import { FORMATIONS, type FormationKey } from './formations';
 import { benchOf, findOwned, fromBase64, toBase64, type SaveData } from './save';
+import { natureById } from './natures';
 import { MAX_TECHNIQUES, type PokemonInstance } from './stats';
 import { TECHNIQUES, badgeBonus, type TechniqueId } from './techniques';
 
@@ -18,6 +19,8 @@ interface CodeMon {
   l: number;
   iv: Stats6;
   ev: Stats6;
+  /** Natura. */
+  na?: string;
   /** Tecniche (vecchi codici: `t`, una sola). */
   ts?: TechniqueId[];
   t?: TechniqueId;
@@ -38,7 +41,7 @@ const KEYS = ['hp', 'atk', 'def', 'spa', 'spd', 'spe'] as const;
 const pack = (p: PokemonInstance): CodeMon => ({
   k: p.speciesKey, l: p.level,
   iv: KEYS.map((k) => p.ivs[k]) as Stats6, ev: KEYS.map((k) => p.evs[k]) as Stats6,
-  ...(p.techniques?.length ? { ts: p.techniques } : {}), ...(p.nickname ? { n: p.nickname } : {}), ...(p.shiny ? { s: true } : {}),
+  ...(p.techniques?.length ? { ts: p.techniques } : {}), ...(p.nature ? { na: p.nature } : {}), ...(p.nickname ? { n: p.nickname } : {}), ...(p.shiny ? { s: true } : {}),
 });
 
 /** Il codice della tua squadra attuale. */
@@ -64,7 +67,7 @@ const unpack = (m: CodeMon, i: number): PokemonInstance => ({
   uid: `amico-${i}-${m.k}`, speciesKey: m.k, level: m.l,
   ivs: stats6(m.iv),
   evs: stats6(m.ev),
-  techniques: [...new Set([...(m.ts ?? []), ...(m.t ? [m.t] : [])])], nickname: typeof m.n === 'string' ? m.n.slice(0, 16) : undefined, shiny: m.s === true,
+  techniques: [...new Set([...(m.ts ?? []), ...(m.t ? [m.t] : [])])], nature: natureById(m.na)?.id, nickname: typeof m.n === 'string' ? m.n.slice(0, 16) : undefined, shiny: m.s === true,
 });
 
 /** La squadra dell'amico pronta da sfidare, oppure il motivo per cui il codice non va. */

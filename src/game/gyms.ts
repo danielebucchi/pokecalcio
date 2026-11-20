@@ -60,7 +60,7 @@ export const GYMS: Gym[] = [
     pool: ['voltorb', 'grubbin', 'chinchou', 'wattrel', 'emolga', 'stunfisk', 'joltik', 'dracozolt', 'spheal'],
   },
   {
-    leader: 'Erika', city: 'Azzurropoli', type: 'grass', badge: 'Medaglia Arcobaleno', level: 43, color: '#4fb393', training: 1, extraLevels: 4,
+    leader: 'Erika', city: 'Azzurropoli', type: 'grass', badge: 'Medaglia Arcobaleno', level: 43, color: '#4fb393', training: 1, extraLevels: 5,
     formation: 'rombo', signature: 'oddish', counter: 'roggenrola',
     // Rosso/Blu: Victreebel, Tangela, Vileplume
     pool: ['bellsprout', 'tangela', 'ferroseed', 'lileep', 'lotad', 'snover', 'rowlet', 'toedscool', 'roggenrola'],
@@ -78,7 +78,7 @@ export const GYMS: Gym[] = [
     pool: ['mr-mime', 'venonat', 'staryu', 'stantler', 'beldum', 'blipbug', 'fennekin', 'baltoy', 'inkay'],
   },
   {
-    leader: 'Blaine', city: 'Isola Cannella', type: 'fire', badge: 'Medaglia Vulcano', level: 58, color: '#f08a5d', training: 0.85, extraLevels: 4,
+    leader: 'Blaine', city: 'Isola Cannella', type: 'fire', badge: 'Medaglia Vulcano', level: 58, color: '#f08a5d', training: 0.85, extraLevels: 3,
     formation: 'rombo', signature: 'growlithe', counter: 'turtwig',
     // Rosso/Blu: Growlithe, Ponyta, Rapidash, Arcanine
     pool: ['ponyta', 'capsakid', 'rolycoly', 'fletchling', 'numel', 'oricorio', 'turtonator', 'larvesta', 'turtwig'],
