@@ -1122,8 +1122,6 @@ body .topbar { padding-top: calc(8px + env(safe-area-inset-top)); }
 }
 
 /* regolamento */
-.rules-link { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
-.rules-link > div { flex: 1 1 240px; display: flex; flex-direction: column; gap: 2px; }
 .guide { max-width: 860px; margin: 0 auto; display: flex; flex-direction: column; gap: 14px; }
 .guide-head { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
 .guide-head h1 { margin: 0; }

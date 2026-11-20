@@ -234,7 +234,7 @@ export function renderHub(app: HTMLElement, save: SaveData, ch: Challenges, stat
     renderHub(app, save, ch, state, actions);
   });
   // esporta / importa: un pannello sopra i link in fondo
-  // regolamento (dal fondo della pagina e dalla mappa)
+  // regolamento: un link discreto in fondo alla pagina
   app.querySelectorAll<HTMLButtonElement>('[data-open-guide]').forEach((b) => (b.onclick = actions.openGuide));
   // installazione come app
   app.querySelector<HTMLButtonElement>('[data-install]')?.addEventListener('click', () => void promptInstall());
@@ -1662,11 +1662,6 @@ function renderMap(main: HTMLElement, save: SaveData, ch: Challenges, actions: H
     <section class="card badge-case">
       <h3>Medaglie <small>${save.badges}/${GYMS.length}</small>${eventsFound(save)}</h3>
       <div class="badges">${badges}</div>
-    </section>
-    <section class="card rules-link">
-      <span class="ach-icon">📖</span>
-      <div><b>Come si gioca</b><small class="muted">Partite, statistiche, tipi, nature, MT, squadra, viaggio, palestre e Lega: tutto nel regolamento.</small></div>
-      <button data-open-guide>Apri il regolamento</button>
     </section>`;
 
   // sul telefono la mappa è più larga dello schermo e scorre: si parte centrati su dove sei
@@ -1680,7 +1675,6 @@ function renderMap(main: HTMLElement, save: SaveData, ch: Challenges, actions: H
     }
   };
   centerMap();
-  main.querySelector<HTMLButtonElement>('[data-open-guide]')?.addEventListener('click', actions.openGuide);
   // formazione consigliata contro la squadra della sfida
   main.querySelectorAll<HTMLButtonElement>('[data-suggest]').forEach((b) => {
     b.onclick = () => {
