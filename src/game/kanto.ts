@@ -63,7 +63,8 @@ export interface KantoLocation {
    * se vinci si unisce a te (niente tasso di cattura). `levelGap` = livelli sotto quelli del luogo
    * (negativo = sopra: come in Rosso/Blu i leggendari sono più alti dei selvatici intorno).
    */
-  legendary?: { key: string; levelGap: number };
+  /** `escortLevels`: livelli sopra il luogo della sua scorta (già evoluta), tarati per vincere ~55-60%. */
+  legendary?: { key: string; levelGap: number; escortLevels?: number };
   wild: string[];
   trainers: RouteTrainer[];
   /** Pokémon regalati una volta sola (vedi PlaceEvent). */
@@ -194,7 +195,7 @@ export const KANTO: KantoLocation[] = [
   },
   {
     id: 'centrale-elettrica', name: 'Centrale Elettrica', kind: 'dungeon', x: 950, y: 110, badges: 5, level: 52,
-    wild: ['pikachu', 'magnemite', 'voltorb', 'electabuzz'], trainers: [], legendary: { key: 'zapdos', levelGap: -4 },
+    wild: ['pikachu', 'magnemite', 'voltorb', 'electabuzz'], trainers: [], legendary: { key: 'zapdos', levelGap: -4, escortLevels: 8 },
   },
   {
     id: 'lavandonia', name: 'Lavandonia', kind: 'city', x: 880, y: 330, badges: 3, level: 41, wild: ['gastly', 'cubone'],
@@ -273,7 +274,7 @@ export const KANTO: KantoLocation[] = [
   },
   {
     id: 'isole-spumarine', weather: 'grandine', name: 'Isole Spumarine', kind: 'dungeon', x: 300, y: 660, badges: 5, level: 56,
-    wild: ['seel', 'psyduck', 'slowpoke', 'zubat', 'krabby', 'jynx'], trainers: [], legendary: { key: 'articuno', levelGap: -6 },
+    wild: ['seel', 'psyduck', 'slowpoke', 'zubat', 'krabby', 'jynx'], trainers: [], legendary: { key: 'articuno', levelGap: -6, escortLevels: 5 },
   },
   {
     id: 'isola-cannella', weather: 'sole', name: 'Isola Cannella', kind: 'city', x: 200, y: 650, badges: 5, level: 57, gym: 6,
@@ -307,7 +308,7 @@ export const KANTO: KantoLocation[] = [
     trainers: [{ id: 'blu-6', name: `${BLU} (Percorso 22)`, team: ['pidgey', 'growlithe', 'exeggcute', 'abra', 'squirtle', 'rhyhorn'], levelBonus: 1 }],
   },
   {
-    id: 'via-vittoria', name: 'Via Vittoria', kind: 'dungeon', x: 70, y: 180, badges: 8, level: 65, requiresTrainer: 'blu-6', legendary: { key: 'moltres', levelGap: 0 },
+    id: 'via-vittoria', name: 'Via Vittoria', kind: 'dungeon', x: 70, y: 180, badges: 8, level: 65, requiresTrainer: 'blu-6', legendary: { key: 'moltres', levelGap: 0, escortLevels: 16 },
     wild: ['machop', 'geodude', 'onix', 'zubat', 'cubone'],
     trainers: [
       { id: 'vittoria-fantallenatore', name: 'Fantallenatore', team: ['dratini', 'rhyhorn', 'exeggcute'] },
@@ -318,7 +319,7 @@ export const KANTO: KantoLocation[] = [
   {
     id: 'grotta-ignota', name: 'Grotta Ignota', kind: 'dungeon', x: 740, y: 70, badges: 8, level: 70, requiresChampion: true,
     wild: ['abra', 'voltorb', 'ditto', 'rhyhorn', 'paras', 'magnemite', 'zubat', 'jigglypuff', 'chansey'], trainers: [],
-    legendary: { key: 'mewtwo', levelGap: -2 },
+    legendary: { key: 'mewtwo', levelGap: -2, escortLevels: 9 },
   },
   { id: 'altopiano-blu', name: 'Altopiano Blu', kind: 'city', x: 70, y: 80, badges: 8, level: 66, league: true, wild: [], trainers: [] },
 ];
