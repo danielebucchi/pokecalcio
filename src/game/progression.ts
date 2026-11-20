@@ -2,7 +2,7 @@ import { POKEDEX, descendants, type BaseStats } from '../data/pokedex';
 import type { Match } from '../match/engine';
 import { GYMS } from './gyms';
 import { SESSIONS_PER_PLACE, type OwnedPokemon, type SaveData } from './save';
-import { gameStats, realStats, type GameStats, type Role } from './stats';
+import { realStats, statsFor, type GameStats, type Role } from './stats';
 
 export const MAX_LEVEL = 100;
 export const EV_STAT_CAP = 252;
@@ -47,7 +47,7 @@ export function addExp(p: OwnedPokemon, amount: number, cap = MAX_LEVEL): number
 }
 
 export function currentStats(p: OwnedPokemon): GameStats {
-  return gameStats(realStats(POKEDEX[p.speciesKey], p));
+  return statsFor(POKEDEX[p.speciesKey], p);
 }
 
 // ───────────────────────────── allenamento ─────────────────────────────

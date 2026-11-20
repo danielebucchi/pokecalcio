@@ -1,6 +1,6 @@
 import { POKEDEX, TYPE_NAMES } from '../data/pokedex';
 import { STARTER_GROUPS, STARTER_LEVEL, ratingsOf } from '../game/save';
-import { createInstance, gameStats, realStats, type Role } from '../game/stats';
+import { createInstance, statsFor, type Role } from '../game/stats';
 import { esc, evoLine } from './common';
 import { SHINY_RATE } from '../game/recruit';
 import { spriteUrl } from './sprites';
@@ -19,7 +19,7 @@ const GROUP_HINTS: Record<GroupRole, string> = {
 function preview(key: string) {
   const inst = createInstance(key, STARTER_LEVEL);
   inst.ivs = { hp: 15, atk: 15, def: 15, spa: 15, spd: 15, spe: 15 };
-  return { inst, g: gameStats(realStats(POKEDEX[key], inst)), ratings: ratingsOf(inst) };
+  return { inst, g: statsFor(POKEDEX[key], inst), ratings: ratingsOf(inst) };
 }
 
 /**

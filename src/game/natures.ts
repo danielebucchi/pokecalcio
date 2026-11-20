@@ -1,10 +1,11 @@
-import type { BaseStats } from '../data/pokedex';
+import type { GameStats } from './stats';
 
 /**
- * Nature, come nei giochi dalla terza generazione: ognuna alza del 10% una statistica e ne abbassa
- * un'altra del 10% (i PV mai); cinque sono neutre. Nomi italiani ufficiali.
+ * Nature, come nei giochi ma sulle quattro statistiche del calcio: ognuna alza del 10% Attacco, Difesa,
+ * Velocità o Resistenza (PV) e ne abbassa un'altra del 10%; cinque sono neutre. Nomi italiani ufficiali,
+ * scelti tra le nature dei giochi con lo stesso significato (Timida: più veloce, meno attacco).
  */
-type Stat = Exclude<keyof BaseStats, 'hp'>;
+type Stat = keyof GameStats;
 
 export interface Nature {
   id: string;
@@ -14,16 +15,12 @@ export interface Nature {
 }
 
 const ROWS: [string, string, Stat | null, Stat | null][] = [
-  ['hardy', 'Ardita', null, null], ['lonely', 'Schiva', 'atk', 'def'], ['brave', 'Audace', 'atk', 'spe'],
-  ['adamant', 'Decisa', 'atk', 'spa'], ['naughty', 'Birbona', 'atk', 'spd'],
-  ['bold', 'Sicura', 'def', 'atk'], ['docile', 'Docile', null, null], ['relaxed', 'Placida', 'def', 'spe'],
-  ['impish', 'Scaltra', 'def', 'spa'], ['lax', 'Fiacca', 'def', 'spd'],
-  ['timid', 'Timida', 'spe', 'atk'], ['hasty', 'Lesta', 'spe', 'def'], ['serious', 'Seria', null, null],
-  ['jolly', 'Allegra', 'spe', 'spa'], ['naive', 'Ingenua', 'spe', 'spd'],
-  ['modest', 'Modesta', 'spa', 'atk'], ['mild', 'Mite', 'spa', 'def'], ['quiet', 'Quieta', 'spa', 'spe'],
-  ['bashful', 'Ritrosa', null, null], ['rash', 'Ardente', 'spa', 'spd'],
-  ['calm', 'Calma', 'spd', 'atk'], ['gentle', 'Gentile', 'spd', 'def'], ['sassy', 'Vivace', 'spd', 'spe'],
-  ['careful', 'Cauta', 'spd', 'spa'], ['quirky', 'Furba', null, null],
+  ['lonely', 'Schiva', 'att', 'dif'], ['brave', 'Audace', 'att', 'vel'], ['adamant', 'Decisa', 'att', 'pv'],
+  ['bold', 'Sicura', 'dif', 'att'], ['relaxed', 'Placida', 'dif', 'vel'], ['impish', 'Scaltra', 'dif', 'pv'],
+  ['timid', 'Timida', 'vel', 'att'], ['hasty', 'Lesta', 'vel', 'dif'], ['jolly', 'Allegra', 'vel', 'pv'],
+  ['calm', 'Calma', 'pv', 'att'], ['gentle', 'Gentile', 'pv', 'dif'], ['sassy', 'Vivace', 'pv', 'vel'],
+  ['hardy', 'Ardita', null, null], ['docile', 'Docile', null, null], ['serious', 'Seria', null, null],
+  ['bashful', 'Ritrosa', null, null], ['quirky', 'Furba', null, null],
 ];
 
 export const NATURES: Nature[] = ROWS.map(([id, name, up, down]) => ({ id, name, ...(up ? { up } : {}), ...(down ? { down } : {}) }));
@@ -37,9 +34,18 @@ export const randomNeutralNature = () => {
   return neutral[Math.floor(Math.random() * neutral.length)].id;
 };
 
-/** Moltiplicatore della natura su una statistica (1.1, 0.9 o 1). */
-export function natureMult(id: string | undefined, stat: keyof BaseStats): number {
+/** Moltiplicatore della natura su una statistica del gioco (1.1, 0.9 o 1). */
+export function natureMult(id: string | undefined, stat: Stat): number {
   const n = natureById(id);
-  if (!n || stat === 'hp') return 1;
+  if (!n) return 1;
   return n.up === stat ? 1.1 : n.down === stat ? 0.9 : 1;
+}
+
+export const STAT_NAMES: Record<Stat, string> = { att: 'Attacco', dif: 'Difesa', vel: 'Velocità', pv: 'Resistenza' };
+
+/** "Timida · Velocità +10%, Attacco −10%" (o "Seria · neutra"). */
+export function natureText(id: string | undefined): string {
+  const n = natureById(id);
+  if (!n) return '';
+  return n.up ? `${n.name} · ${STAT_NAMES[n.up]} +10%, ${STAT_NAMES[n.down!]} −10%` : `${n.name} · neutra`;
 }

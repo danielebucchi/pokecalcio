@@ -4,8 +4,8 @@ import { registerCaught, type Dex } from './dex';
 import { TECHNIQUES, type TechniqueId } from './techniques';
 import { KANTO, RIVAL_STEPS, locationById, type KantoLocation, type PlaceEvent, type RouteTrainer } from './kanto';
 import type { LeagueRun } from './league';
-import { randomNeutralNature } from './natures';
-import { MAX_TECHNIQUES, createInstance, gameStats, knows, realStats, roleRatings, type PokemonInstance, type Role } from './stats';
+import { natureById, randomNeutralNature } from './natures';
+import { createInstance, knows, MAX_TECHNIQUES, roleRatings, statsFor, type PokemonInstance, type Role } from './stats';
 
 /** Pokémon della rosa: resta sempre nella forma base, l'evoluzione esiste solo in partita. */
 export interface OwnedPokemon extends PokemonInstance {
@@ -217,7 +217,8 @@ export function loadSave(): SaveData {
         data.box ??= [];
         // una tecnica sola → elenco di tecniche; chi è nato prima delle nature ne riceve una neutra
         for (const p of [...data.roster, ...data.box]) {
-          p.nature ??= randomNeutralNature();
+          // nature mancanti (Pokémon di prima) o non più esistenti: una neutra, le statistiche non cambiano
+          if (!natureById(p.nature)) p.nature = randomNeutralNature();
           if (p.technique) p.techniques = [...new Set([...(p.techniques ?? []), p.technique])];
           delete p.technique;
         }
@@ -308,7 +309,7 @@ export function lineupProblem(save: SaveData): string | null {
 
 export function ratingsOf(p: PokemonInstance) {
   const sp = POKEDEX[p.speciesKey];
-  return roleRatings(gameStats(realStats(sp, p)), sp.heightDm);
+  return roleRatings(statsFor(sp, p), sp.heightDm);
 }
 
 /** Rosa massima (come le squadre dei giochi, ma per il calcio a 5): oltre bisogna lasciare andare qualcuno. */

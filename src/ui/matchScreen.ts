@@ -1,7 +1,7 @@
 import { POKEDEX, TYPE_NAMES } from '../data/pokedex';
 import { resultPenaltyText, type ExpReport } from '../game/progression';
 import type { RecruitOffer } from '../game/recruit';
-import { gameStats, realStats, type PokemonInstance } from '../game/stats';
+import { statsFor, type PokemonInstance } from '../game/stats';
 import { TO_BOX, ratingsOf } from '../game/save';
 import { Match, MAX_SUBS, SIM_PER_MINUTE, formName, isActive, type MatchEvent, type Player, type TeamSetup } from '../match/engine';
 import { ACHIEVEMENT_SESSIONS, type Achievement } from '../game/achievements';
@@ -505,7 +505,7 @@ function showPostMatch(
 ) {
   const offerCards = offers.map((o, i) => {
     const sp = POKEDEX[o.inst.speciesKey];
-    const g = gameStats(realStats(sp, o.inst));
+    const g = statsFor(sp, o.inst);
     const ratings = ratingsOf(o.inst);
     const best = (['DIF', 'CEN', 'ATT'] as const).reduce((a, b) => (ratings[b] > ratings[a] ? b : a));
     return `<div class="offer ${o.inst.shiny ? 'shiny' : ''}" data-offer="${i}">
