@@ -35,20 +35,26 @@ export interface GameStats {
   pv: number;
 }
 
-/** Formula ufficiale delle statistiche, con la natura. */
+/** Formula ufficiale delle statistiche (la natura si applica dopo, sulle 4 del gioco: vedi statsFor). */
 export function realStats(sp: Species, inst: PokemonInstance): BaseStats {
   const L = inst.level;
   const calc = (k: keyof BaseStats) =>
     Math.floor(((2 * sp.base[k] + inst.ivs[k] + Math.floor(inst.evs[k] / 4)) * L) / 100);
-  const other = (k: keyof BaseStats) => Math.floor((calc(k) + 5) * natureMult(inst.nature, k));
   return {
     hp: calc('hp') + L + 10,
-    atk: other('atk'),
-    def: other('def'),
-    spa: other('spa'),
-    spd: other('spd'),
-    spe: other('spe'),
+    atk: calc('atk') + 5,
+    def: calc('def') + 5,
+    spa: calc('spa') + 5,
+    spd: calc('spd') + 5,
+    spe: calc('spe') + 5,
   };
+}
+
+/** Le 4 statistiche del gioco di un Pokémon, con la sua natura (+10% / −10%). */
+export function statsFor(sp: Species, inst: PokemonInstance): GameStats {
+  const g = gameStats(realStats(sp, inst));
+  const m = (k: keyof GameStats) => Math.round(g[k] * natureMult(inst.nature, k));
+  return { att: m('att'), dif: m('dif'), vel: m('vel'), pv: m('pv') };
 }
 
 export function gameStats(s: BaseStats): GameStats {

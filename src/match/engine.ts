@@ -1,8 +1,5 @@
 import { POKEDEX, bst, type PokeType } from '../data/pokedex';
-import {
-  gameStats, headerRating, keeperRating, knows, reachOf, realStats, roleRatings,
-  type GameStats, type PokemonInstance, type Role,
-} from '../game/stats';
+import { headerRating, keeperRating, knows, reachOf, roleRatings, statsFor, type GameStats, type PokemonInstance, type Role } from '../game/stats';
 import { typeMultiplier } from '../game/typechart';
 import { weatherFactor, type Weather } from '../game/weather';
 
@@ -392,7 +389,7 @@ export class Match {
       if (!tired) continue;
       const score = (inst: PokemonInstance) => {
         const sp = POKEDEX[inst.speciesKey];
-        return roleRatings(gameStats(realStats(sp, inst)), sp.heightDm)[tired.role];
+        return roleRatings(statsFor(sp, inst), sp.heightDm)[tired.role];
       };
       const best = [...this.bench[team]].sort((a, b) => score(b) - score(a))[0];
       this.substitute(tired, best.uid);
@@ -401,7 +398,7 @@ export class Match {
 
   private recompute(p: Player, keepHpRatio: boolean) {
     const sp = POKEDEX[p.formKey];
-    const base = gameStats(realStats(sp, p.inst));
+    const base = statsFor(sp, p.inst);
     // bonus delle medaglie della squadra e tecnica Scatto
     const bonus = this.teams[p.team].bonus ?? {};
     // meteo: dipende dai tipi della forma attuale (evolvendo possono cambiare)
