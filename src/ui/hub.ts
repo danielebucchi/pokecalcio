@@ -1322,7 +1322,7 @@ function leagueCard(save: SaveData, league: NonNullable<Challenges['league']>, m
     action = `<button class="primary big" data-join>${run ? 'Nuova edizione' : 'Iscriviti alla Lega'}</button>`;
   } else {
     const round = ROUND_NAMES[currentRound(run)];
-    status = `Edizione ${run.edition} · ${round}: affronti <b>${esc(opponent!.name)}</b> (${esc(opponent!.title)}, ${opponent!.type ? `tipo ${TYPE_NAMES[opponent!.type]}` : 'squadra mista'}), livello ${opponent!.level}. Se perdi sei eliminato.`;
+    status = `Edizione ${run.edition} · ${round}: affronti <b>${esc(opponent!.name)}</b> (${esc(opponent!.title)}, ${opponent!.type ? `tipo ${TYPE_NAMES[opponent!.type]}` : 'squadra mista'}), livello ${team ? Math.max(...team.roster.map((r) => r.inst.level)) : opponent!.level}. Se perdi sei eliminato.`;
     action = `<button class="primary big" data-play="league" ${problem ? 'disabled' : ''}>Gioca ${round.toLowerCase()}</button>`;
   }
 
