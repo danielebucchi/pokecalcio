@@ -197,8 +197,11 @@ export const buildGymTeam = (gym: Gym, scout?: TeamSetup) =>
 /** Livello della squadra del capopalestra (qualcuno sta un po' sopra il livello nominale della palestra). */
 export const gymLevel = (gym: Gym) => gym.level + (gym.extraLevels ?? 0);
 
-/** Livelli in più degli allenatori della Lega (tarato con `npm run career`: la si vince in qualche edizione). */
-export const LEAGUE_EXTRA = { levels: 0 };
+/**
+ * Livelli in più degli allenatori della Lega (e di Blu): con una squadra forte (al tetto 68, allenata,
+ * con le MT) si vince ~70% delle partite di Lega, quindi il titolo arriva in qualche edizione.
+ */
+export const LEAGUE_EXTRA = { levels: 8 };
 /** Dopo ogni titolo Lega, Campione e rivincite salgono di 2 livelli (fino a +10). */
 export const postGameLevels = (titles: number) => 2 * Math.min(titles, 5);
 export const buildLeagueTeam = (t: LeagueTrainer, scout?: TeamSetup, extra = 0) =>
