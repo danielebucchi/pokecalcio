@@ -1086,3 +1086,8 @@ body .topbar { padding-top: calc(8px + env(safe-area-inset-top)); }
 .mini-team img.shiny { box-shadow: 0 0 0 2px var(--star-deep); background: var(--star); }
 .shiny-note { margin: 6px 0 0; font-weight: 600; }
 .wild-match.has-shiny { box-shadow: 0 0 0 2px var(--star-deep), 0 10px 30px -12px var(--star-deep); }
+
+/* volo: sezione richiudibile sotto "Dove andare" */
+.fly-list { margin-top: 12px; }
+.fly-list summary { padding: 6px 0; }
+.fly-list .places { margin-top: 8px; }

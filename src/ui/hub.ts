@@ -58,6 +58,9 @@ export interface Challenges {
   rematch: TeamSetup | null;
 }
 
+/** Sezione Volo aperta o chiusa (si ricorda tra una visita e l'altra). */
+const FLY_OPEN_KEY = 'pokecalcio-fly-open';
+
 /** L'invito a installare l'app è stato chiuso (resta il link in fondo alla pagina). */
 const INSTALL_DISMISS_KEY = 'pokecalcio-install-dismissed';
 
@@ -1623,7 +1626,10 @@ function renderMap(main: HTMLElement, save: SaveData, ch: Challenges, actions: H
   const travel = `<section class="card travel">
     <div class="travel-head"><h3>Dove andare</h3><button class="link" id="toggle-map">${showMapOnPhone ? 'Nascondi la mappa' : 'Mostra la mappa'}</button></div>
     <div class="places">${neighbors(loc.id).map((id) => placeCard(save, locationById(id))).join('')}</div>
-    ${flyTargets.length ? `<h3>Volo <small>città già visitate</small></h3><div class="places">${flyTargets.map((l) => placeCard(save, l, true)).join('')}</div>` : ''}
+    ${flyTargets.length ? `<details class="fold fly-list" ${localStorage.getItem(FLY_OPEN_KEY) === '1' ? 'open' : ''}>
+      <summary><b>Volo</b> <small class="muted">${flyTargets.length} ${flyTargets.length === 1 ? 'città già visitata' : 'città già visitate'}</small></summary>
+      <div class="places">${flyTargets.map((l) => placeCard(save, l, true)).join('')}</div>
+    </details>` : ''}
   </section>`;
 
   main.innerHTML = `
@@ -1691,6 +1697,10 @@ function renderMap(main: HTMLElement, save: SaveData, ch: Challenges, actions: H
   };
   centerMap();
   // formazione consigliata contro la squadra della sfida
+  // volo: aperto o chiuso come l'hai lasciato
+  main.querySelector<HTMLDetailsElement>('.fly-list')?.addEventListener('toggle', (e) => {
+    localStorage.setItem(FLY_OPEN_KEY, (e.currentTarget as HTMLDetailsElement).open ? '1' : '0');
+  });
   main.querySelectorAll<HTMLButtonElement>('[data-suggest]').forEach((b) => {
     b.onclick = () => {
       const key = b.dataset.suggest;
