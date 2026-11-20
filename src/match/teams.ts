@@ -274,9 +274,9 @@ export const LEGEND = { evolved: true, escortLevels: 0 };
  */
 export function buildLegendaryTeam(loc: KantoLocation, playerLevel = 0): TeamSetup {
   const leg = loc.legendary!;
-  // dopo il titolo (Mewtwo) non c'è più il tetto di livello: il leggendario e la scorta crescono con
-  // i tuoi titolari, altrimenti a Lv 90 vinceresti quasi sempre. Prima della Lega il tetto basta.
-  const base = loc.requiresChampion ? Math.max(loc.level, Math.round(playerLevel)) : loc.level;
+  // il leggendario e la scorta crescono con i tuoi titolari (mai sotto il livello del luogo): arrivarci
+  // più forti non lo rende facile, e dopo il titolo (niente tetto di livello) Mewtwo resta una sfida
+  const base = Math.max(loc.level, Math.round(playerLevel));
   const boss = createInstance(leg.key, Math.max(5, Math.min(100, base - leg.levelGap)));
   boss.ivs = { hp: 31, atk: 31, def: 31, spa: 31, spd: 31, spe: 31 };
   const wild = localWild(loc);

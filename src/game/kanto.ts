@@ -195,7 +195,7 @@ export const KANTO: KantoLocation[] = [
   },
   {
     id: 'centrale-elettrica', name: 'Centrale Elettrica', kind: 'dungeon', x: 950, y: 110, badges: 5, level: 52,
-    wild: ['pikachu', 'magnemite', 'voltorb', 'electabuzz'], trainers: [], legendary: { key: 'zapdos', levelGap: -4, escortLevels: 8 },
+    wild: ['pikachu', 'magnemite', 'voltorb', 'electabuzz'], trainers: [], legendary: { key: 'zapdos', levelGap: -4, escortLevels: 5 },
   },
   {
     id: 'lavandonia', name: 'Lavandonia', kind: 'city', x: 880, y: 330, badges: 3, level: 41, wild: ['gastly', 'cubone'],
@@ -308,7 +308,7 @@ export const KANTO: KantoLocation[] = [
     trainers: [{ id: 'blu-6', name: `${BLU} (Percorso 22)`, team: ['pidgey', 'growlithe', 'exeggcute', 'abra', 'squirtle', 'rhyhorn'], levelBonus: 1 }],
   },
   {
-    id: 'via-vittoria', name: 'Via Vittoria', kind: 'dungeon', x: 70, y: 180, badges: 8, level: 65, requiresTrainer: 'blu-6', legendary: { key: 'moltres', levelGap: 0, escortLevels: 16 },
+    id: 'via-vittoria', name: 'Via Vittoria', kind: 'dungeon', x: 70, y: 180, badges: 8, level: 65, requiresTrainer: 'blu-6', legendary: { key: 'moltres', levelGap: 0, escortLevels: 13 },
     wild: ['machop', 'geodude', 'onix', 'zubat', 'cubone'],
     trainers: [
       { id: 'vittoria-fantallenatore', name: 'Fantallenatore', team: ['dratini', 'rhyhorn', 'exeggcute'] },
