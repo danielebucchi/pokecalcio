@@ -204,8 +204,7 @@ export const KANTO: KantoLocation[] = [
     ],
   },
   { id: 'percorso-8', weather: 'sole', name: 'Percorso 8', kind: 'route', x: 770, y: 330, badges: 3, level: 41, wild: ['pidgey', 'meowth', 'ekans', 'sandshrew', 'vulpix', 'growlithe'], trainers: [] },
-  // Mr. Mime: alle porte di Zafferanopoli (nei giochi si aveva con uno scambio)
-  { id: 'percorso-7', name: 'Percorso 7', kind: 'route', x: 540, y: 330, badges: 3, level: 41, wild: ['pidgey', 'oddish', 'bellsprout', 'meowth', 'vulpix', 'growlithe', 'mr-mime'], trainers: [] },
+  { id: 'percorso-7', name: 'Percorso 7', kind: 'route', x: 540, y: 330, badges: 3, level: 41, wild: ['pidgey', 'oddish', 'bellsprout', 'meowth', 'vulpix', 'growlithe'], trainers: [] },
   {
     id: 'azzurropoli', name: 'Azzurropoli', kind: 'city', x: 430, y: 330, badges: 3, level: 42, gym: 3, wild: [],
     events: [{
@@ -292,7 +291,9 @@ export const KANTO: KantoLocation[] = [
   // ── verso Giovanni (Lv 63) ──
   {
     id: 'percorso-21', name: 'Percorso 21', kind: 'route', x: 200, y: 605, badges: 6, level: 61,
-    wild: ['tentacool', 'tangela', 'rattata', 'pidgey', 'magikarp'],
+    // Mr. Mime (nei giochi si aveva con uno scambio): qui solo dopo la 6ª medaglia, perché è tanto
+    // forte contro Erika, Koga e Sabrina da renderle troppo facili (vedi npm run counter)
+    wild: ['tentacool', 'tangela', 'rattata', 'pidgey', 'magikarp', 'mr-mime'],
     trainers: [
       { id: 'p21-pescatore', name: 'Pescatore', team: ['goldeen', 'shellder', 'poliwag'] },
       { id: 'p21-nuotatore', name: 'Nuotatore', team: ['tentacool', 'horsea', 'staryu'] },

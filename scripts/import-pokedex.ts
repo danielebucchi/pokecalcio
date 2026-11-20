@@ -115,6 +115,24 @@ function unlockLevel(speciesId: string): { level: number; method: string } {
   return { level, method };
 }
 
+/**
+ * Evoluzioni che nei giochi nascono solo da una forma regionale: PokeAPI le lega alla specie, quindi
+ * sembrerebbe che anche la forma normale ci arrivi (Farfetch'd → Sirfetch'd). Qui si usano solo le
+ * forme normali, perciò queste evoluzioni non ci sono.
+ */
+const REGIONAL_ONLY = new Set([
+  'sirfetchd', // Farfetch'd di Galar
+  'mr-rime', // Mr. Mime di Galar
+  'perrserker', // Meowth di Galar
+  'cursola', // Corsola di Galar
+  'obstagoon', // Linoone di Galar
+  'runerigus', // Yamask di Galar
+  'overqwil', // Qwilfish di Hisui
+  'sneasler', // Sneasel di Hisui
+  'basculegion', // Basculin a strisce bianche (Hisui)
+  'clodsire', // Wooper di Paldea
+]);
+
 const out = species
   .filter((s) => defaultPokemon.has(s.id))
   .map((s) => {
@@ -122,9 +140,9 @@ const out = species
     const n = names.get(s.id) ?? {};
     const base = statsByPokemon.get(p.id)!;
     const evolutions = species
-      .filter((c) => c.evolves_from_species_id === s.id)
+      .filter((c) => c.evolves_from_species_id === s.id && !REGIONAL_ONLY.has(c.identifier))
       .map((c) => ({ key: c.identifier, ...unlockLevel(c.id) }));
-    const pre = s.evolves_from_species_id ? byId.get(s.evolves_from_species_id)!.identifier : undefined;
+    const pre = s.evolves_from_species_id && !REGIONAL_ONLY.has(s.identifier) ? byId.get(s.evolves_from_species_id)!.identifier : undefined;
     return {
       key: s.identifier,
       dex: Number(s.id),
