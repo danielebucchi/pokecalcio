@@ -30,7 +30,7 @@ import type { TeamSetup } from '../match/engine';
 import { clubTeam, evolvedForm, gymLevel, localWild } from '../match/teams';
 import { SIDE_MISSIONS, claimReward, missionComplete, rewardLabel } from '../game/rewards';
 import { BADGE_BONUS, BADGE_BONUS_PCT, TECHNIQUES, techniqueById, type TechniqueId } from '../game/techniques';
-import { esc, evoLine, teamTable } from './common';
+import { esc, evoLine, swapPickHtml, teamTable } from './common';
 import { medalHtml, spriteUrl } from './sprites';
 import { bindThemeToggle, currentTheme, setTheme, themeToggleHtml } from './theme';
 
@@ -522,7 +522,7 @@ function renderMissions(main: HTMLElement, save: SaveData, state: HubState, acti
       const box = main.querySelector<HTMLElement>(`[data-mission="${m.id}"] .ms-prize`)!;
       box.innerHTML = `<p class="swap-title">Rosa piena (${save.roster.length}/${ROSTER_MAX}): chi mandi nel PC di Bill?</p>
         <div class="swap-list"><button data-release-for="${TO_BOX}">📦 Il nuovo arrivato</button>${releasable(save)
-          .map((p) => `<button data-release-for="${p.uid}"><img src="${sprite(p)}" alt=""> ${nameOf(p)} <small>Lv${p.level}</small></button>`)
+          .map((p) => swapPickHtml(p, `data-release-for="${p.uid}"`))
           .join('')}</div>`;
       box.querySelectorAll<HTMLButtonElement>('[data-release-for]').forEach((r) => {
         r.onclick = () => {
@@ -813,7 +813,7 @@ function boxHtml(save: SaveData, state: HubState): string {
       const picking = state.withdrawing === p.uid;
       const swap = picking
         ? `<div class="swap-list">${releasable(save)
-            .map((r) => `<button data-swap-out="${r.uid}"><img src="${sprite(r)}" alt=""> ${nameOf(r)} <small>Lv${r.level}</small></button>`)
+            .map((r) => swapPickHtml(r, `data-swap-out="${r.uid}"`))
             .join('')}</div>`
         : '';
       return `<div class="reserve">

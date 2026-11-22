@@ -9,7 +9,7 @@ import { Renderer } from '../match/renderer';
 import { WEATHER, weatherText, type Weather } from '../game/weather';
 import { closeCoach, coach, type CoachStep } from './coach';
 import { ReplayRecorder, clipDuration, frameAt, type Snapshot } from '../match/replay';
-import { esc, natureLabel } from './common';
+import { esc, natureLabel, swapPickHtml } from './common';
 import { medalHtml, spriteUrl } from './sprites';
 import {
   canVibrate, musicEnabled, playSfx, setMusic, setSfx, setVibe, sfxEnabled, startMusic, stopMusic, vibeEnabled, vibrate, type Sfx,
@@ -90,7 +90,7 @@ export interface RosterState {
   count: number;
   max: number;
   /** Chi si può lasciare andare (non chi è in formazione). */
-  releasable: { uid: string; speciesKey: string; level: number; name: string }[];
+  releasable: PokemonInstance[];
   /** Specie di tutta la rosa e del PC di Bill, per dire subito se ce n'è già uno uguale. */
   species: string[];
   boxSpecies: string[];
@@ -657,13 +657,14 @@ function showPostMatch(
       box.classList.add('swap');
       box.innerHTML = `<p class="swap-title">Rosa piena (${st.count}/${st.max}): chi mandi nel PC di Bill?</p>
         <div class="swap-list"><button data-release="${TO_BOX}">📦 Lui direttamente</button>${st.releasable
-          .map((r) => `<button data-release="${r.uid}"><img src="${spriteUrl(POKEDEX[r.speciesKey].dex)}" alt=""> ${esc(r.name)} <small>Lv${r.level}</small></button>`)
+          .map((r) => swapPickHtml(r, `data-release="${r.uid}"`))
           .join('')}</div>
         <button class="link" data-cancel>Annulla</button>`;
       box.querySelectorAll<HTMLButtonElement>('[data-release]').forEach((r) => {
         r.onclick = () => {
           const uid = r.dataset.release!;
-          const out = uid === TO_BOX ? BOX_LABEL : st.releasable.find((x) => x.uid === uid)!.name;
+          const leaving = st.releasable.find((x) => x.uid === uid);
+          const out = uid === TO_BOX || !leaving ? BOX_LABEL : leaving.nickname || POKEDEX[leaving.speciesKey].name;
           box.classList.remove('swap');
           if (recruit?.(offers[i].inst, uid) !== false) joined(i, out);
         };

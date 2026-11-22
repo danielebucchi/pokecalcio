@@ -269,7 +269,7 @@ function playMatch(kind: ChallengeKind, trainerId?: string, skip = false) {
       return {
         count: save.roster.length,
         max: ROSTER_MAX,
-        releasable: releasable(save).map((p) => ({ uid: p.uid, speciesKey: p.speciesKey, level: p.level, name: p.nickname || POKEDEX[p.speciesKey].name })),
+        releasable: releasable(save),
         species: save.roster.map((p) => p.speciesKey),
         boxSpecies: save.box.map((p) => p.speciesKey),
       };

@@ -10,6 +10,27 @@ export const esc = (s: string) =>
 /** Natura con il suo effetto: "Timida · Velocità +10%, Attacco −10%". */
 export const natureLabel = (inst: PokemonInstance) => natureText(inst.nature);
 
+/**
+ * Bottone per scegliere chi lascia il posto (va nel PC): sprite (toccandolo si apre la scheda), nome,
+ * voto nel ruolo migliore, le 4 statistiche e la natura, così si confronta con chi arriva.
+ */
+export function swapPickHtml(inst: PokemonInstance, attr: string): string {
+  const sp = POKEDEX[inst.speciesKey];
+  const g = statsOf(inst);
+  const r = roleRatings(g, sp.heightDm);
+  // come nella carta di chi chiede di unirsi: il miglior ruolo di movimento (il portiere a parte)
+  const best = (['DIF', 'CEN', 'ATT'] as const).reduce((a, b) => (r[b] > r[a] ? b : a));
+  const name = inst.nickname || sp.name;
+  return `<button class="swap-pick" ${attr}>
+    <img class="poke-open" src="${spriteUrl(sp.dex, inst.shiny)}" alt="" data-poke="${inst.uid}" title="Scheda di ${esc(name)}">
+    <span class="swap-body">
+      <span><b>${esc(name)}</b>${inst.shiny ? ' ✨' : ''} <small>Lv${inst.level}</small> <span class="role role-${best}">${best}</span> <small>voto ${Math.round(r[best])}</small></span>
+      <small class="swap-stats">ATT <b>${g.att}</b> · DIF <b>${g.dif}</b> · VEL <b>${g.vel}</b> · PV <b>${g.pv}</b></small>
+      ${inst.nature ? `<small class="muted">${esc(natureLabel(inst))}</small>` : ''}
+    </span>
+  </button>`;
+}
+
 export function statsOf(inst: PokemonInstance) {
   return statsFor(POKEDEX[inst.speciesKey], inst);
 }

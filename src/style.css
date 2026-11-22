@@ -1137,3 +1137,10 @@ body .topbar { padding-top: calc(8px + env(safe-area-inset-top)); }
 .guide-table th { font-size: 0.8rem; color: var(--ink-soft); text-align: left; padding: 4px 8px; white-space: nowrap; }
 .guide-table td { text-align: center; padding: 8px; border-radius: 10px; background: var(--track); font-weight: 600; }
 .guide-table td.neutral { background: transparent; color: var(--ink-mute); font-style: italic; border: 1px dashed var(--line-strong); }
+
+/* chi lascia il posto (va nel PC): con statistiche per confrontarlo con chi arriva */
+.swap-list .swap-pick { display: flex; align-items: center; gap: 8px; text-align: left; padding: 0.4rem 0.8rem 0.4rem 0.4rem; flex: 1 1 260px; max-width: 360px; }
+.swap-list .swap-pick img { width: 40px; height: 40px; flex: none; image-rendering: pixelated; }
+.swap-pick .swap-body { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.swap-pick .swap-stats { white-space: nowrap; }
+.swap-pick .role { font-size: 0.6rem; padding: 0.05rem 0.4rem; }
