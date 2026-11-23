@@ -72,6 +72,8 @@ export interface HubState {
   /** Amichevole: il codice dell'amico incollato e l'eventuale errore. */
   friendCode?: string;
   friendError?: string | null;
+  /** Pokémon della tribuna che sta per entrare in una panchina piena (si sceglie chi esce). */
+  benchSwap?: string | null;
   /** Ordine e filtro per tipo di tribuna e PC di Bill. */
   sort?: RosterSort;
   typeFilter?: PokeType | '';
@@ -745,6 +747,22 @@ function renderSquad(main: HTMLElement, save: SaveData, state: HubState, actions
       actions.changed();
     };
   });
+  // panchina piena: chi entra dalla tribuna prende il posto di chi scegli
+  main.querySelectorAll<HTMLButtonElement>('[data-bench-swap]').forEach((b) => {
+    b.onclick = () => {
+      state.benchSwap = state.benchSwap === b.dataset.benchSwap ? null : b.dataset.benchSwap!;
+      renderSquad(main, save, state, actions);
+    };
+  });
+  main.querySelectorAll<HTMLButtonElement>('[data-bench-out]').forEach((b) => {
+    b.onclick = () => {
+      const incoming = state.benchSwap;
+      if (!incoming) return;
+      save.bench = benchOf(save).map((p) => (p.uid === b.dataset.benchOut ? incoming : p.uid));
+      state.benchSwap = null;
+      actions.changed();
+    };
+  });
   // mandare nel Box: secondo tocco per confermare (durante l'avventura non si ritira)
   main.querySelectorAll<HTMLButtonElement>('[data-release]').forEach((b) => {
     b.onclick = () => {
@@ -865,15 +883,25 @@ function benchHtml(save: SaveData, bench: OwnedPokemon[], state: HubState): stri
   const row = (p: OwnedPokemon, inBench: boolean) => {
     const { role: best } = bestRole(p);
     const confirm = state.releasing === p.uid;
-    return `<div class="reserve ${inBench ? 'on-bench' : ''}">
+    const g = currentStats(p);
+    // a panchina piena non si spegne il bottone: si sceglie chi lascia il posto
+    const swapping = state.benchSwap === p.uid;
+    const benchBtn = inBench
+      ? `<button data-bench="${p.uid}">Togli</button>`
+      : full
+        ? `<button class="${swapping ? '' : 'primary'}" data-bench-swap="${p.uid}" title="Panchina piena: scegli chi lascia il posto">${swapping ? 'Annulla' : 'Scambia ›'}</button>`
+        : `<button class="primary" data-bench="${p.uid}">In panchina</button>`;
+    return `<div class="reserve ${inBench ? 'on-bench' : ''} ${swapping ? 'swapping' : ''}">
       <img class="poke-open" src="${sprite(p)}" alt="" data-poke="${p.uid}" title="Scheda di ${esc(plainName(p))}">
       <span class="reserve-body"><b>${nameOf(p)}</b> <small>Lv${p.level}</small>
-        <small class="muted"><span class="role role-${best}">${best}</span> voto ${Math.round(bestRating(p))}</small></span>
+        <small class="muted"><span class="role role-${best}">${best}</span> voto ${Math.round(bestRating(p))}</small>
+        <small class="reserve-stats">ATT <b>${g.att}</b> · DIF <b>${g.dif}</b> · VEL <b>${g.vel}</b> · PV <b>${g.pv}</b></small></span>
       <span class="reserve-actions">
-        <button data-bench="${p.uid}" ${!inBench && full ? 'disabled title="Panchina piena: togline uno"' : ''}>${inBench ? 'Togli' : 'In panchina'}</button>
+        ${benchBtn}
         <button class="${confirm ? 'danger' : 'link'}" data-release="${p.uid}" title="Mandalo nel PC di Bill: libera un posto nella rosa${save.titles ? '' : ' (lo ritiri da Campione)'}">${confirm ? 'Sicuro?' : 'Nel PC'}</button>
       </span>
-    </div>`;
+    </div>${swapping ? `<div class="bench-swap"><p class="swap-title">Chi lascia la panchina a ${nameOf(p)}?</p>
+      <div class="swap-list">${bench.map((b) => swapPickHtml(b, `data-bench-out="${b.uid}"`)).join('')}</div></div>` : ''}`;
   };
   return `<section class="card bench-card">
     <h3>Panchina <small>${bench.length}/${BENCH_MAX} · in partita possono entrare solo loro</small></h3>

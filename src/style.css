@@ -302,7 +302,8 @@ button.link:hover:not(:disabled) { background: none; color: var(--pink-deep); tr
 .pick-head { display: flex; gap: 12px; align-items: flex-start; margin-bottom: 10px; }
 .pick-head h3 { margin: 0 0 2px; }
 .pick-head p { margin: 0; }
-.pick-list { display: flex; flex-direction: column; gap: 8px; max-height: 620px; overflow-y: auto; padding: 2px; }
+/* tutti i candidati visibili: niente riquadro con lo scorrimento interno */
+.pick-list { display: flex; flex-direction: column; gap: 8px; padding: 2px; }
 .pick { display: grid; grid-template-columns: 56px 1fr 90px; gap: 12px; align-items: center; justify-content: stretch; text-align: left; padding: 8px 14px 8px 8px; border-radius: 20px; font-weight: 500; }
 .pick img { width: 56px; height: 56px; image-rendering: pixelated; background: var(--lilac-soft); border-radius: 16px; }
 .pick.current { border: 2px solid var(--lilac-deep); }
@@ -1144,3 +1145,9 @@ body .topbar { padding-top: calc(8px + env(safe-area-inset-top)); }
 .swap-pick .swap-body { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .swap-pick .swap-stats { white-space: nowrap; }
 .swap-pick .role { font-size: 0.6rem; padding: 0.05rem 0.4rem; }
+
+/* panchina e tribuna: statistiche e scambio a panchina piena */
+.reserve-stats { white-space: nowrap; color: var(--ink-soft); }
+.reserve.swapping { background: var(--lilac-soft); border-radius: 14px; }
+.bench-swap { padding: 6px 0 10px; }
+.bench-swap .swap-title { margin: 4px 0 6px; font-weight: 600; }
