@@ -72,6 +72,8 @@ export interface HubState {
   /** Amichevole: il codice dell'amico incollato e l'eventuale errore. */
   friendCode?: string;
   friendError?: string | null;
+  /** Telefono: pannello per scegliere chi gioca nella posizione toccata, aperto sopra la pagina. */
+  pickOpen?: boolean;
   /** Pokémon della tribuna che sta per entrare in una panchina piena (si sceglie chi esce). */
   benchSwap?: string | null;
   /** Ordine e filtro per tipo di tribuna e PC di Bill. */
@@ -694,21 +696,32 @@ function renderSquad(main: HTMLElement, save: SaveData, state: HubState, actions
         ${benchHtml(save, bench, state)}
         ${boxHtml(save, state)}
       </div>
-      <div class="card pick-panel">
+      <div class="pick-backdrop ${state.pickOpen ? 'open' : ''}" data-pick-close></div>
+      <div class="card pick-panel ${state.pickOpen ? 'open' : ''}">
         <div class="pick-head">
           <span class="role role-${selected.role}">${selected.role}</span>
           <div>
             <h3>Chi gioca come ${ROLE_INFO[selected.role].name.toLowerCase()}?</h3>
             <p class="muted">${ROLE_INFO[selected.role].needs} Tocca un Pokémon per metterlo in questa posizione.</p>
           </div>
+          <button class="pick-close" data-pick-close aria-label="Chiudi">✕</button>
         </div>
         <div class="pick-list">${picks}</div>
       </div>
     </div>`;
 
+  // sul telefono la scelta si apre come pannello dal basso, sopra la pagina (in fondo non si vedeva)
+  const phone = () => window.matchMedia('(max-width: 1000px)').matches;
   main.querySelectorAll<HTMLButtonElement>('.pm-slot').forEach((b) => {
     b.onclick = () => {
       state.slot = Number(b.dataset.slot);
+      state.pickOpen = phone();
+      renderSquad(main, save, state, actions);
+    };
+  });
+  main.querySelectorAll<HTMLElement>('[data-pick-close]').forEach((b) => {
+    b.onclick = () => {
+      state.pickOpen = false;
       renderSquad(main, save, state, actions);
     };
   });
@@ -722,6 +735,7 @@ function renderSquad(main: HTMLElement, save: SaveData, state: HubState, actions
       if (j >= 0) save.lineup[j] = out; // era già in campo: si scambiano di posto
       else if (out && save.bench.includes(uid)) save.bench[save.bench.indexOf(uid)] = out; // dalla panchina: chi esce prende il suo posto
       save.lineup[i] = uid;
+      state.pickOpen = false;
       actions.changed();
     };
   });
