@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://play.nerdnostalgia.store/sitemap.xml

@@ -32,6 +32,7 @@ import { SIDE_MISSIONS, claimReward, missionComplete, rewardLabel } from '../gam
 import { BADGE_BONUS, BADGE_BONUS_PCT, TECHNIQUES, techniqueById, type TechniqueId } from '../game/techniques';
 import { esc, evoLine, swapPickHtml, teamTable } from './common';
 import { medalHtml, spriteUrl } from './sprites';
+import { openShareSheet } from './share';
 import { bindThemeToggle, currentTheme, setTheme, themeToggleHtml } from './theme';
 
 export type HubTab = 'squad' | 'training' | 'map' | 'missions';
@@ -211,6 +212,7 @@ export function renderHub(app: HTMLElement, save: SaveData, ch: Challenges, stat
       <button class="link" data-save-panel="import">Importa salvataggio</button>
       ${installMode() ? '<button class="link" data-install-again>Installa l\'app</button>' : ''}
       <button id="reset" class="link">Ricomincia la carriera da zero</button>
+      <p class="credit">un progetto di <a href="https://nerdnostalgia.store" target="_blank" rel="noopener">NerdNostalgia</a></p>
     </footer>`;
 
   app.querySelectorAll<HTMLButtonElement>('[data-tab]').forEach((b) => {
@@ -691,6 +693,7 @@ function renderSquad(main: HTMLElement, save: SaveData, state: HubState, actions
               .join('')}</select>
           </label>
           <button id="auto" title="Sceglie da solo la combinazione con i voti più alti">Formazione automatica</button>
+          <button id="share-team" title="Un'immagine con i tuoi titolari da mandare agli amici">📤 Condividi la squadra</button>
         </div>
         <p class="muted">${formation.description}</p>
         ${benchHtml(save, bench, state)}
@@ -746,6 +749,7 @@ function renderSquad(main: HTMLElement, save: SaveData, state: HubState, actions
     save.bench = autoBench(save);
     actions.changed();
   };
+  document.getElementById('share-team')!.onclick = () => openShareSheet(save);
   document.getElementById('auto')!.onclick = () => {
     save.lineup = autoLineup(save);
     save.bench = autoBench(save);
